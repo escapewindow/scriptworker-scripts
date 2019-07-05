@@ -15,7 +15,7 @@ setup(
     description="TaskCluster iScript",
     author="Mozilla Release Engineering",
     author_email="release+python@mozilla.com",
-    url="https://github.com/escapewindow/iscript",
+    url="https://github.com/mozilla-releng/scriptworker-scripts/tree/master/iscript",
     packages=find_packages(),
     package_data={"iscript": ["data/*"]},
     include_package_data=True,
