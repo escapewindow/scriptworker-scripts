@@ -18,7 +18,7 @@ from scriptworker_client.exceptions import (
 )
 from scriptworker_client.utils import makedirs, rm
 
-if sys.version_info < (3, 7):
+if sys.version_info < (3, 7):  # pragma: no cover
     from async_generator import asynccontextmanager
 else:
     from contextlib import asynccontextmanager
