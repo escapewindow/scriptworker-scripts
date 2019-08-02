@@ -16,6 +16,7 @@ import scriptworker_client.aio as aio
 from scriptworker_client.exceptions import (
     Download404,
     DownloadError,
+    LockfileError,
     RetryError,
     TaskError,
 )
@@ -161,6 +162,22 @@ async def test_semaphore_wrapper():
     results2 = await aio.raise_future_exceptions(futures)
     assert len(results2) == 4
     assert results1 == results2[0:2]
+
+
+# lockfile {{{1
+@pytest.mark.asyncio
+async def test_lockfile(tmpdir):
+    """Given two lockfile paths, a third ``lockfile`` call should hit a ``LockfileError``."""
+    paths = [os.path.join(tmpdir, "1"), os.path.join(tmpdir, "2")]
+
+    async with aio.lockfile(paths) as path1:
+        assert path1 in paths
+        async with aio.lockfile(paths) as path2:
+            assert path2 in paths
+            assert path1 != path2
+            with pytest.raises(LockfileError):
+                async with aio.lockfile(paths) as path3:
+                    assert path3 is None
 
 
 # retry_async {{{1

@@ -103,6 +103,12 @@ class NonBlockingInterProcessLock(fasteners.InterProcessLock):
             )
         return self
 
+    async def __aenter__(self):
+        return self.__enter__()
+
+    async def __aexit__(self, *args):
+        self.release()
+
 
 @asynccontextmanager
 async def lockfile(paths, attempts=10, sleep=30):
@@ -126,13 +132,14 @@ async def lockfile(paths, attempts=10, sleep=30):
 
     """
     for attempt in range(0, attempts):
-        for path in paths:
+        for path in [item for item in random.sample(paths, len(paths))]:
             try:
-                with NonBlockingInterProcessLock(path):
+                async with NonBlockingInterProcessLock(path) as lock:
+                    assert lock.acquired
                     yield path
                     rm(path)
                     return
-            except LockfileError:
+            except (LockfileError, threading.ThreadError):
                 continue
         log.debug("Couldn't get lock; sleeping {}".format(sleep))
         await asyncio.sleep(sleep)
