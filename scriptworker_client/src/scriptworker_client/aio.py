@@ -3,18 +3,26 @@
 import aiohttp
 import asyncio
 import async_timeout
+import fasteners
 import logging
 import os
 import random
-
+import sys
 from scriptworker_client.exceptions import (
     Download404,
     DownloadError,
+    LockfileError,
     RetryError,
     TaskError,
     TimeoutError,
 )
-from scriptworker_client.utils import makedirs
+from scriptworker_client.utils import makedirs, rm
+
+if sys.version_info < (3, 7):
+    from async_generator import asynccontextmanager
+else:
+    from contextlib import asynccontextmanager
+
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +87,58 @@ async def semaphore_wrapper(semaphore, coro):
     """
     async with semaphore:
         return await coro
+
+
+# lockfile {{{1
+class NonBlockingInterProcessLock(fasteners.InterProcessLock):
+    """Attempt to create a lockfile at ``self.path``."""
+
+    def __enter__(self):
+        """Override ``fasteners.__enter__`` to not block on lock acquisition."""
+        gotten = self.acquire(blocking=False)
+        if not gotten:
+            raise LockfileError(
+                "Unable to acquire a file lock on `%s` (when used as a context manager)",
+                self.path,
+            )
+        return self
+
+
+@asynccontextmanager
+async def lockfile(paths, attempts=10, sleep=30):
+    """Acquire a lockfile from among ``paths`` and yield the path.
+
+    If we want inter-process semaphores, we can use file locking rather than
+    ``asyncio.Semaphore``.
+
+    Args:
+        paths (list): a list of path strings to use as lockfiles.
+        attempts (int, optional): the number of attempts to get a lockfile.
+            This means we attempt to get a lockfile from every path in ``paths``, ``attempts`` times. Defaults to 20.
+        sleep (int, optional): the number of seconds to sleep between attempts.
+            We sleep after attempting every path in ``paths``. Defaults to 30.
+
+    Yields:
+        str: the lockfile path acquired.
+
+    Raises:
+        LockfileError: if we've exhausted our attempts.
+
+    """
+    for attempt in range(0, attempts):
+        for path in paths:
+            try:
+                with NonBlockingInterProcessLock(path):
+                    yield path
+                    rm(path)
+                    return
+            except LockfileError:
+                continue
+        log.debug("Couldn't get lock; sleeping {}".format(sleep))
+        await asyncio.sleep(sleep)
+    raise LockfileError(
+        "Can't get lock from paths %s after %s attempts", paths, attempts
+    )
 
 
 # retry_async {{{1
