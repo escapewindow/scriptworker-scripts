@@ -4,8 +4,9 @@ taskcluster_scope_prefix: "project:releng:signing:"
 verbose: true
 local_notarization_accounts: ["account1"]
 concurrency_limit: 2
+worker_user: cltbld
 default_keychains:
-    - "/Users/cltbld/Library/Keychains/login.keychain-db"
+    - "/Users/%(user)s/Library/Keychains/login.keychain-db"
     - "/Library/Keychains/System.keychain"
 dmg_prefix: dep1
 mac_config:

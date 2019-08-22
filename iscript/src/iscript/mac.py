@@ -19,6 +19,7 @@ from scriptworker_client.aio import (
     raise_future_exceptions,
     retry_async,
     semaphore_wrapper,
+    LockfileFuture,
 )
 from scriptworker_client.exceptions import DownloadError
 from scriptworker_client.utils import get_artifact_path, makedirs, rm, run_command
@@ -669,6 +670,7 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
     await unlock_keychain(
         key_config["signing_keychain"], key_config["keychain_password"]
     )
+    await update_keychain_search_path(config, key_config["signing_keychain"])
     futures = []
     # sign apps concurrently
     for app in all_paths:
@@ -1174,10 +1176,6 @@ async def notarize_behavior(config, task):
         await sign_langpacks(config, key_config, langpack_apps)
         all_paths = filter_apps(all_paths, fmt="autograph_langpack", inverted=True)
     await extract_all_apps(config, all_paths)
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     await sign_all_apps(config, key_config, entitlements_path, all_paths)
 
     log.info("Notarizing")
@@ -1230,10 +1228,6 @@ async def sign_behavior(config, task):
         await sign_langpacks(config, key_config, langpack_apps)
         all_paths = filter_apps(all_paths, fmt="autograph_langpack", inverted=True)
     await extract_all_apps(config, all_paths)
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     await sign_all_apps(config, key_config, entitlements_path, all_paths)
     await tar_apps(config, all_paths)
     log.info("Done signing apps.")
@@ -1260,10 +1254,6 @@ async def sign_and_pkg_behavior(config, task):
         await sign_langpacks(config, key_config, langpack_apps)
         all_paths = filter_apps(all_paths, fmt="autograph_langpack", inverted=True)
     await extract_all_apps(config, all_paths)
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     await sign_all_apps(config, key_config, entitlements_path, all_paths)
     await tar_apps(config, all_paths)
 

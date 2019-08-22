@@ -460,9 +460,9 @@ async def test_sign_all_apps(mocker, tmpdir, raises):
         "signing_keychain": "keychain",
         "keychain_password": "password",
     }
-    config = {}
     entitlements_path = "fake_entitlements_path"
     work_dir = str(tmpdir)
+    config = {"work_dir": work_dir}
     all_paths = []
     app_paths = []
     for i in range(3):
