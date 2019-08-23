@@ -839,53 +839,15 @@ async def wrap_notarization_with_sudo(
                 "exception": IScriptError,
             },
             retry_async_kwargs={"retry_exceptions": (IScriptError,), "attempts": 10},
-            lockfile_kwargs={"attempts": 20, "sleep": 30},
+            lockfile_kwargs={
+                "attempts": config.get("lockfile_attempts", 20),
+                "sleep": config.get("lockfile_sleep_seconds", 30),
+            },
         )
         futures.append(asyncio.ensure_future(lf.run_with_lockfile()))
     await raise_future_exceptions(futures)
     for app in all_paths:
         uuids[get_uuid_from_log(app.notarization_log_path)] = app.notarization_log_path
-    return uuids
-
-
-# notarize_no_sudo {{{1
-async def notarize_no_sudo(work_dir, key_config, zip_path):
-    """Create a notarization request, without sudo, for a single zip.
-
-    Raises:
-        IScriptError: on failure
-
-    Returns:
-        dict: uuid to log path
-
-    """
-    notarization_log_path = os.path.join(work_dir, "notarization.log")
-    bundle_id = get_bundle_id(key_config["base_bundle_id"])
-    base_cmd = [
-        "xcrun",
-        "altool",
-        "--notarize-app",
-        "-f",
-        zip_path,
-        "--primary-bundle-id",
-        bundle_id,
-        "-u",
-        key_config["apple_notarization_account"],
-        "--asc-provider",
-        key_config["apple_asc_provider"],
-        "--password",
-    ]
-    log_cmd = base_cmd + ["********"]
-    await retry_async(
-        run_command,
-        args=[base_cmd + [key_config["apple_notarization_password"]]],
-        kwargs={
-            "log_path": notarization_log_path,
-            "log_cmd": log_cmd,
-            "exception": IScriptError,
-        },
-    )
-    uuids = {get_uuid_from_log(notarization_log_path): notarization_log_path}
     return uuids
 
 
@@ -1172,8 +1134,6 @@ async def notarize_behavior(config, task):
         IScriptError: on fatal error.
 
     """
-    work_dir = config["work_dir"]
-
     key_config = get_key_config(config, task, base_key="mac_config")
     entitlements_path = await download_entitlements_file(config, key_config, task)
 
@@ -1186,16 +1146,10 @@ async def notarize_behavior(config, task):
     await sign_all_apps(config, key_config, entitlements_path, all_paths)
 
     log.info("Notarizing")
-    if key_config["notarize_type"] == "multi_account":
-        await create_all_notarization_zipfiles(all_paths, path_attr="app_path")
-        poll_uuids = await wrap_notarization_with_sudo(
-            config, key_config, all_paths, path_attr="zip_path"
-        )
-    else:
-        zip_path = await create_one_notarization_zipfile(
-            work_dir, all_paths, path_attr="app_path"
-        )
-        poll_uuids = await notarize_no_sudo(work_dir, key_config, zip_path)
+    await create_all_notarization_zipfiles(all_paths, path_attr="app_path")
+    poll_uuids = await wrap_notarization_with_sudo(
+        config, key_config, all_paths, path_attr="zip_path"
+    )
 
     await poll_all_notarization_status(key_config, poll_uuids)
     await staple_notarization(all_paths, path_attr="app_path")

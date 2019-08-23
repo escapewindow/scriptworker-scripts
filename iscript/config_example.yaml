@@ -4,6 +4,8 @@ taskcluster_scope_prefix: "project:releng:signing:"
 verbose: true
 local_notarization_accounts: ["account1"]
 lockfile_template: "/tmp/%(user)s.lockfile"
+lockfile_attempts: 20
+lockfile_sleep_seconds: 30
 concurrency_limit: 2
 worker_user: cltbld
 default_keychains:
@@ -12,7 +14,6 @@ default_keychains:
 dmg_prefix: dep1
 mac_config:
     dep:
-        notarize_type: multi_account
         signing_keychain: /path/to/dep.keychain
         supported_behaviors:
             - mac_geckodriver
