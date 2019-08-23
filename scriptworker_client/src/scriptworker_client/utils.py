@@ -228,7 +228,7 @@ async def run_command(
                 log_filehandle.seek(0)
                 log_contents = log_filehandle.read()
             raise exception(
-                "%s in %s exited %s!\n%s", log_cmd, cwd, exitcode, log_contents
+                "{} in {} exited {}!\n{}".format(log_cmd, cwd, exitcode, log_contents)
             )
     log.info("%s in %s exited %d", log_cmd, cwd, exitcode)
     return exitcode
