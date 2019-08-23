@@ -686,9 +686,10 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
     futures = []
     # sign apps concurrently, with lockfiles
     lockfile_map = get_lockfile_map(config)
+    semaphore = asyncio.Semaphore(config.get("concurrency_limit", 2))
     for app in all_paths:
         lf = LockfileFuture(
-            wrap_sign_app_with_sudo
+            wrap_sign_app_with_sudo,
             lockfile_map,
             args=(config, key_config, "%(user)s", app),
             lockfile_kwargs={
@@ -696,7 +697,9 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
                 "sleep": config.get("lockfile_sleep_seconds", 30),
             },
         )
-        futures.append(asyncio.ensure_future(lf.run_with_lockfile()))
+        futures.append(
+            asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
+        )
     await raise_future_exceptions(futures)
     # verify signatures
     futures = []
@@ -816,6 +819,7 @@ async def wrap_notarization_with_sudo(
     counter = 0
     uuids = {}
     lockfile_map = get_lockfile_map(config)
+    semaphore = asyncio.Semaphore(config.get("concurrency_limit", 2))
 
     for app in all_paths:
         app.check_required_attrs([path_attr, "parent_dir"])
@@ -864,7 +868,9 @@ async def wrap_notarization_with_sudo(
                 "sleep": config.get("lockfile_sleep_seconds", 30),
             },
         )
-        futures.append(asyncio.ensure_future(lf.run_with_lockfile()))
+        futures.append(
+            asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
+        )
     await raise_future_exceptions(futures)
     for app in all_paths:
         uuids[get_uuid_from_log(app.notarization_log_path)] = app.notarization_log_path
