@@ -752,6 +752,23 @@ def get_notarization_status_from_log(log_path):
         pass
 
 
+# get_lockfile_map {{{1
+def get_lockfile_map(config):
+    """Create a ``lockfile_map``, for ``LockfileFuture`` usage, from ``config``.
+
+    Args:
+        config (dict): the running config.
+
+    Returns:
+        dict: the lockfile_map
+
+    """
+    lockfile_map = {}
+    for user in config["local_notarization_accounts"]:
+        lockfile_map[config["lockfile_template"] % {"user": user}] = {"user": user}
+    return lockfile_map
+
+
 # wrap_notarization_with_sudo {{{1
 async def wrap_notarization_with_sudo(
     config, key_config, all_paths, path_attr="zip_path"
@@ -776,66 +793,56 @@ async def wrap_notarization_with_sudo(
 
     """
     futures = []
-    accounts = config["local_notarization_accounts"]
     counter = 0
     uuids = {}
+    lockfile_map = get_lockfile_map(config)
 
     for app in all_paths:
         app.check_required_attrs([path_attr, "parent_dir"])
 
-    while counter < len(all_paths):
-        futures = []
-        for account in accounts:
-            app = all_paths[counter]
-            app.notarization_log_path = f"{app.parent_dir}-notarization.log"
-            bundle_id = get_bundle_id(
-                key_config["base_bundle_id"], counter=str(counter)
-            )
-            zip_path = getattr(app, path_attr)
-            base_cmdln = " ".join(
-                [
-                    "xcrun",
-                    "altool",
-                    "--notarize-app",
-                    "-f",
-                    zip_path,
-                    "--primary-bundle-id",
-                    '"{}"'.format(bundle_id),
-                    "-u",
-                    key_config["apple_notarization_account"],
-                    "--asc-provider",
-                    key_config["apple_asc_provider"],
-                    "--password",
-                ]
-            )
-            cmd = [
-                "sudo",
-                "su",
-                account,
-                "-c",
-                base_cmdln
-                + " {}".format(shlex.quote(key_config["apple_notarization_password"])),
+    for app in all_paths:
+        app.notarization_log_path = f"{app.parent_dir}-notarization.log"
+        bundle_id = get_bundle_id(key_config["base_bundle_id"], counter=str(counter))
+        zip_path = getattr(app, path_attr)
+        base_cmdln = " ".join(
+            [
+                "xcrun",
+                "altool",
+                "--notarize-app",
+                "-f",
+                zip_path,
+                "--primary-bundle-id",
+                '"{}"'.format(bundle_id),
+                "-u",
+                key_config["apple_notarization_account"],
+                "--asc-provider",
+                key_config["apple_asc_provider"],
+                "--password",
             ]
-            log_cmd = ["sudo", "su", account, "-c", base_cmdln + " ********"]
-            futures.append(
-                asyncio.ensure_future(
-                    retry_async(
-                        run_command,
-                        args=[cmd],
-                        kwargs={
-                            "log_path": app.notarization_log_path,
-                            "log_cmd": log_cmd,
-                            "exception": IScriptError,
-                        },
-                        retry_exceptions=(IScriptError,),
-                        attempts=10,
-                    )
-                )
-            )
-            counter += 1
-            if counter >= len(all_paths):
-                break
-        await raise_future_exceptions(futures)
+        )
+        cmd = [
+            "sudo",
+            "su",
+            "%(user)s",
+            "-c",
+            base_cmdln
+            + " {}".format(shlex.quote(key_config["apple_notarization_password"])),
+        ]
+        log_cmd = ["sudo", "su", "%(user)s", "-c", base_cmdln + " ********"]
+        lf = LockfileFuture(
+            run_command,
+            lockfile_map,
+            args=[cmd],
+            kwargs={
+                "log_path": app.notarization_log_path,
+                "log_cmd": log_cmd,
+                "exception": IScriptError,
+            },
+            retry_async_kwargs={"retry_exceptions": (IScriptError,), "attempts": 10},
+            lockfile_kwargs={"attempts": 20, "sleep": 30},
+        )
+        futures.append(asyncio.ensure_future(lf.run_with_lockfile()))
+    await raise_future_exceptions(futures)
     for app in all_paths:
         uuids[get_uuid_from_log(app.notarization_log_path)] = app.notarization_log_path
     return uuids
