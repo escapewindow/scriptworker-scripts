@@ -7,6 +7,7 @@ Attributes:
 """
 import logging
 
+from scriptworker_client.utils import run_command
 from iscript.exceptions import IScriptError
 
 log = logging.getLogger(__name__)
@@ -62,3 +63,25 @@ def get_key_config(config, task, base_key="mac_config"):
         return config[base_key][_CERT_TYPE_TO_KEY_CONFIG[cert_type]]
     except KeyError as exc:
         raise IScriptError("get_key_config error: {}".format(str(exc))) from exc
+
+
+# chown {{{1
+async def chown(path, user, group=None, **kwargs):
+    """Wrap a ``sudo chown`` call.
+
+    Args:
+        path (str): the path to chown
+        user (str): the user or UID to chown to
+        group (str, optional): the group to chown to, if specified. Defaults
+            to ``None``.
+
+        kwargs: the kwargs to send to ``run_command``.
+
+    """
+    command = ["sudo", "chown", "-R"]
+    if group is not None:
+        command.append(f"{user}:{group}")
+    else:
+        command.append(user)
+    command.append(path)
+    await run_command(command, **kwargs)

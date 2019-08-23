@@ -12,7 +12,7 @@ from iscript.mac import (
     sign_behavior,
     sign_and_pkg_behavior,
 )
-from iscript.util import get_key_config
+from iscript.utils import get_key_config
 
 
 log = logging.getLogger(__name__)

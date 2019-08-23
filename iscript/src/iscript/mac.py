@@ -29,7 +29,7 @@ from iscript.exceptions import (
     TimeoutError,
     UnknownAppDir,
 )
-from iscript.util import get_key_config
+from iscript.utils import chown, get_key_config
 
 from iscript.autograph import (
     sign_langpacks,
@@ -347,7 +347,7 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
 
 
 # wrap_sign_app_with_sudo {{{1
-async def wrap_sign_app_with_sudo(config, key_config, user, app):
+async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_path):
     """
     """
     # TODO chown app to user
@@ -691,7 +691,7 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
         lf = LockfileFuture(
             wrap_sign_app_with_sudo,
             lockfile_map,
-            args=(config, key_config, "%(user)s", app),
+            args=(config, key_config, "%(user)s", app, entitlements_path),
             lockfile_kwargs={
                 "attempts": config.get("lockfile_attempts", 20),
                 "sleep": config.get("lockfile_sleep_seconds", 30),

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
-"""Test iscript.util
+"""Test iscript.utils
 """
 import pytest
-import iscript.util as util
+import iscript.utils as utils
 from iscript.exceptions import IScriptError
 
 
@@ -34,9 +34,9 @@ def test_get_config_key(scopes, base_key, key, raises):
     task = {"scopes": scopes}
     if raises:
         with pytest.raises(IScriptError):
-            util.get_key_config(config, task, base_key=base_key)
+            utils.get_key_config(config, task, base_key=base_key)
     else:
         assert (
-            util.get_key_config(config, task, base_key=base_key)
+            utils.get_key_config(config, task, base_key=base_key)
             == config[base_key][key]
         )
