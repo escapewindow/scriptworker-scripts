@@ -66,7 +66,7 @@ def get_key_config(config, task, base_key="mac_config"):
 
 
 # chown {{{1
-async def chown(path, user, group=None, **kwargs):
+async def chown(path, user, group=None, exception=IScriptError, **kwargs):
     """Wrap a ``sudo chown`` call.
 
     Args:
@@ -74,7 +74,8 @@ async def chown(path, user, group=None, **kwargs):
         user (str): the user or UID to chown to
         group (str, optional): the group to chown to, if specified. Defaults
             to ``None``.
-
+        exception (Exception, optional): the exception class to raise on
+            failure. Defaults to ``IScriptError``.
         kwargs: the kwargs to send to ``run_command``.
 
     """
@@ -84,4 +85,4 @@ async def chown(path, user, group=None, **kwargs):
     else:
         command.append(user)
     command.append(path)
-    await run_command(command, **kwargs)
+    await run_command(command, exception=exception, **kwargs)

@@ -350,7 +350,7 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
 async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_path):
     """
     """
-    # TODO chown app to user
+    chown(app.app_path, user)
     # TODO unlock_keychain with sudo
     await unlock_keychain(
         key_config["signing_keychain"], key_config["keychain_password"]
@@ -359,7 +359,7 @@ async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_pa
     await update_keychain_search_path(config, key_config["signing_keychain"])
     # TODO sign_app with sudo
     await asyncio.ensure_future(sign_app(key_config, app.app_path, entitlements_path))
-    # TODO chown app back
+    chown(app.app_path, config["worker_user"])
 
 
 # verify_app_signature {{{1
