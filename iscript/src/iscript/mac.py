@@ -346,6 +346,22 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
             )
 
 
+# wrap_sign_app_with_sudo {{{1
+async def wrap_sign_app_with_sudo(config, key_config, user, app):
+    """
+    """
+    # TODO chown app to user
+    # TODO unlock_keychain with sudo
+    await unlock_keychain(
+        key_config["signing_keychain"], key_config["keychain_password"]
+    )
+    # TODO update_keychain_search_path with sudo
+    await update_keychain_search_path(config, key_config["signing_keychain"])
+    # TODO sign_app with sudo
+    await asyncio.ensure_future(sign_app(key_config, app.app_path, entitlements_path))
+    # TODO chown app back
+
+
 # verify_app_signature {{{1
 async def verify_app_signature(key_config, app):
     """Verify the app signature.
@@ -667,16 +683,20 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
                 )
             )
     await raise_future_exceptions(futures)
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     futures = []
-    # sign apps concurrently
+    # sign apps concurrently, with lockfiles
+    lockfile_map = get_lockfile_map(config)
     for app in all_paths:
-        futures.append(
-            asyncio.ensure_future(sign_app(key_config, app.app_path, entitlements_path))
+        lf = LockfileFuture(
+            wrap_sign_app_with_sudo
+            lockfile_map,
+            args=(config, key_config, "%(user)s", app),
+            lockfile_kwargs={
+                "attempts": config.get("lockfile_attempts", 20),
+                "sleep": config.get("lockfile_sleep_seconds", 30),
+            },
         )
+        futures.append(asyncio.ensure_future(lf.run_with_lockfile()))
     await raise_future_exceptions(futures)
     # verify signatures
     futures = []
@@ -1037,6 +1057,7 @@ async def create_pkg_files(config, key_config, all_paths):
     """
     log.info("Creating PKG files")
     futures = []
+    # TODO shift to lockfile
     semaphore = asyncio.Semaphore(config.get("concurrency_limit", 2))
     for app in all_paths:
         # call set_app_path_and_name because we may not have called sign_app() earlier
@@ -1157,6 +1178,7 @@ async def notarize_behavior(config, task):
 
     # pkg
     # Unlock keychain again in case it's locked since previous unlock
+    # TODO shift to lockfile
     await unlock_keychain(
         key_config["signing_keychain"], key_config["keychain_password"]
     )
@@ -1219,6 +1241,7 @@ async def sign_and_pkg_behavior(config, task):
     await tar_apps(config, all_paths)
 
     # pkg
+    # TODO shift to lockfile
     await unlock_keychain(
         key_config["signing_keychain"], key_config["keychain_password"]
     )
