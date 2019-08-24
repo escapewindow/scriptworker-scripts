@@ -192,6 +192,7 @@ async def test_sign_app(mocker, tmpdir, sign_with_entitlements, has_clearkey):
         "sign_with_entitlements": sign_with_entitlements,
     }
     entitlements_path = os.path.join(tmpdir, "entitlements")
+    keychain = os.path.join(tmpdir, "keychain")
     app_path = os.path.join(tmpdir, "foo.app")
 
     contents_dir = os.path.join(app_path, "Contents")
@@ -211,7 +212,7 @@ async def test_sign_app(mocker, tmpdir, sign_with_entitlements, has_clearkey):
         touch(os.path.join(dir_, file_))
     mocker.patch.object(mac, "run_command", new=noop_async)
     mocker.patch.object(mac, "get_bundle_executable", return_value="main")
-    await mac.sign_app(key_config, app_path, entitlements_path)
+    await mac.sign_app(key_config, app_path, keychain, "foo", entitlements_path)
 
 
 # verify_app_signature {{{1
