@@ -263,7 +263,7 @@ async def test_unlock_keychain_timeout(mocker):
     child.signalstatus = None
     mocker.patch.object(pexpect, "spawn", new=partial(fake_spawn, child))
     with pytest.raises(TimeoutError):
-        await mac.unlock_keychain("x", "y")
+        await mac.unlock_keychain("user", "x", "y")
 
 
 @pytest.mark.asyncio
@@ -282,7 +282,7 @@ async def test_unlock_keychain_failure(mocker):
     child.signalstatus = None
     mocker.patch.object(pexpect, "spawn", new=partial(fake_spawn, child))
     with pytest.raises(IScriptError):
-        await mac.unlock_keychain("x", "y")
+        await mac.unlock_keychain("user", "x", "y")
 
 
 # get_app_dir {{{1
