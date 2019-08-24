@@ -1164,10 +1164,13 @@ async def test_geckodriver_behavior(mocker, tmpdir, use_langpack):
         "artifact_dir": artifact_dir,
         "work_dir": work_dir,
         "local_notarization_accounts": ["acct0", "acct1", "acct2"],
+        "lockfile_template": os.path.join(tmpdir, "%(user)s.lock"),
+        "default_keychains": ["/Users/%(user)s/foo"],
+        "worker_user": "foo",
         "mac_config": {
             "dep": {
                 "notarize_type": "single_zip",
-                "signing_keychain": "keychain_path",
+                "signing_keychain_template": "keychain_path",
                 "base_bundle_id": "org.test",
                 "identity": "id",
                 "keychain_password": "keychain_password",
@@ -1210,6 +1213,7 @@ async def test_geckodriver_behavior(mocker, tmpdir, use_langpack):
 
     mocker.patch.object(mac, "extract_all_apps", new=fake_extract)
     mocker.patch.object(mac, "run_command", new=noop_async)
+    mocker.patch.object(mac, "chown", new=noop_async)
     mocker.patch.object(mac, "unlock_keychain", new=noop_async)
     mocker.patch.object(mac, "get_key_config", return_value=config["mac_config"]["dep"])
     await mac.geckodriver_behavior(config, task)
