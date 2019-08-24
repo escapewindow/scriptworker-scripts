@@ -449,7 +449,13 @@ async def update_keychain_search_path(config, user, signing_keychain):
     """
     command = 'security list-keychains -s "{}"'.format(
         signing_keychain + " {}".format(path % {"user": user})
-        for path in config["default_keychains"]
+        for path in config.get(
+            "default_keychains",
+            [
+                "/Users/%(user)s/Library/Keychains/login.keychain-db",
+                "/Library/Keychains/System.keychain",
+            ],
+        )
     )
     sudo_command = ["sudo", "su", user, "-c", command]
     await run_command(sudo_command, cwd=config["work_dir"], exception=IScriptError)
@@ -1048,7 +1054,8 @@ async def tar_apps(config, all_paths):
 
 
 # create_pkg_files {{{1
-async def _pkg_helper(key_config, user, signing_keychain, app):
+async def _pkg_helper(config, key_config, user, app):
+    signing_keychain = key_config["signing_keychain_template"] % {"user": user}
     pkg_opts = []
     if key_config.get("pkg_cert_id"):
         pkg_opts = ["--sign", key_config["pkg_cert_id"]]
@@ -1093,7 +1100,13 @@ async def create_pkg_files(config, key_config, all_paths):
         app.pkg_path = app.app_path.replace(".app", ".pkg")
         app.pkg_name = os.path.basename(app.pkg_path)
         lf = LockfileFuture(
-            _pkg_helper, lockfile_map, args=(key_config, user, signing_keychain, app)
+            _pkg_helper,
+            lockfile_map,
+            args=(config, key_config, "%(user)s", app),
+            lockfile_kwargs={
+                "attempts": config.get("lockfile_attempts", 20),
+                "sleep": config.get("lockfile_sleep_seconds", 30),
+            },
         )
         futures.append(
             asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
@@ -1271,7 +1284,13 @@ async def geckodriver_behavior(config, task):
     await extract_all_apps(config, all_paths)
     lockfile_map = get_lockfile_map(config)
     lf = LockfileFuture(
-        sign_geckodriver, lockfile_map, args=(config, key_config, "%(user)s", all_paths)
+        sign_geckodriver,
+        lockfile_map,
+        args=(config, key_config, "%(user)s", all_paths),
+        lockfile_kwargs={
+            "attempts": config.get("lockfile_attempts", 20),
+            "sleep": config.get("lockfile_sleep_seconds", 30),
+        },
     )
     await lf.run_with_lockfile()
 

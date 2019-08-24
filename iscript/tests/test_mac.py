@@ -36,6 +36,34 @@ def touch(path):
         pass
 
 
+@pytest.yield_fixture(scope="function")
+def config(tmpdir):
+    config = {
+        "artifact_dir": os.path.join(tmpdir, "artifact"),
+        "work_dir": os.path.join(tmpdir, "work"),
+        "local_notarization_accounts": ["acct0", "acct1", "acct2"],
+        "lockfile_template": os.path.join(tmpdir, "%(user)s.lock"),
+        "lockfile_attempts": 5,
+        "lockfile_sleep_seconds": 0.1,
+        "worker_user": "foo",
+        "mac_config": {
+            "dep": {
+                "signing_keychain_template": "keychain_path",
+                "sign_with_entitlements": False,
+                "base_bundle_id": "org.test",
+                "identity": "id",
+                "keychain_password": "keychain_password",
+                "pkg_cert_id": "cert_id",
+                "apple_notarization_account": "apple_account",
+                "apple_notarization_password": "apple_password",
+                "apple_asc_provider": "apple_asc_provider",
+                "notarization_poll_timeout": 2,
+            }
+        },
+    }
+    yield config
+
+
 # App {{{1
 def test_app():
     """``App`` attributes can be set, and ``check_required_attrs`` raises if
@@ -1014,10 +1042,12 @@ async def test_sign_and_pkg_behavior(mocker, tmpdir, use_langpack):
         "artifact_dir": artifact_dir,
         "work_dir": work_dir,
         "local_notarization_accounts": ["acct0", "acct1", "acct2"],
+        "lockfile_template": os.path.join(tmpdir, "%(user)s.lock"),
+        "worker_user": "foo",
         "mac_config": {
             "dep": {
                 "notarize_type": "",
-                "signing_keychain": "keychain_path",
+                "signing_keychain_template": "keychain_path",
                 "sign_with_entitlements": False,
                 "base_bundle_id": "org.test",
                 "identity": "id",
@@ -1077,29 +1107,22 @@ async def test_sign_and_pkg_behavior(mocker, tmpdir, use_langpack):
 # notarize_behavior {{{1
 @pytest.mark.parametrize("use_langpack", (False, True))
 @pytest.mark.asyncio
-async def test_notarize_behavior(mocker, tmpdir, use_langpack):
+async def test_notarize_behavior(mocker, config, use_langpack):
     """Mock ``notarize_behavior`` for full line coverage."""
 
-    artifact_dir = os.path.join(str(tmpdir), "artifact")
-    work_dir = os.path.join(str(tmpdir), "work")
-    config = {
-        "artifact_dir": artifact_dir,
-        "work_dir": work_dir,
-        "local_notarization_accounts": ["acct0", "acct1", "acct2"],
-        "mac_config": {
-            "dep": {
-                "signing_keychain": "keychain_path",
-                "sign_with_entitlements": False,
-                "base_bundle_id": "org.test",
-                "identity": "id",
-                "keychain_password": "keychain_password",
-                "pkg_cert_id": "cert_id",
-                "apple_notarization_account": "apple_account",
-                "apple_notarization_password": "apple_password",
-                "apple_asc_provider": "apple_asc_provider",
-                "notarization_poll_timeout": 2,
-            }
-        },
+    artifact_dir = config["artifact_dir"]
+    work_dir = config["work_dir"]
+    config["mac_config"]["dep"] = {
+        "signing_keychain_template": "keychain_path",
+        "sign_with_entitlements": False,
+        "base_bundle_id": "org.test",
+        "identity": "id",
+        "keychain_password": "keychain_password",
+        "pkg_cert_id": "cert_id",
+        "apple_notarization_account": "apple_account",
+        "apple_notarization_password": "apple_password",
+        "apple_asc_provider": "apple_asc_provider",
+        "notarization_poll_timeout": 2,
     }
 
     task = {
@@ -1135,9 +1158,10 @@ async def test_notarize_behavior(mocker, tmpdir, use_langpack):
     mocker.patch.object(
         mac,
         "get_lockfile_map",
-        return_value={os.path.join(tmpdir, "lock"): {"user": "foo"}},
+        return_value={os.path.join(work_dir, "lock"): {"user": "foo"}},
     )
     mocker.patch.object(mac, "run_command", new=noop_async)
+    mocker.patch.object(mac, "chown", new=noop_async)
     mocker.patch.object(mac, "unlock_keychain", new=noop_async)
     mocker.patch.object(mac, "get_bundle_executable", return_value="bundle_executable")
     mocker.patch.object(mac, "poll_notarization_uuid", new=noop_async)
@@ -1155,32 +1179,22 @@ async def test_notarize_behavior(mocker, tmpdir, use_langpack):
 # geckodriver_behavior {{{1
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_langpack", (False, True))
-async def test_geckodriver_behavior(mocker, tmpdir, use_langpack):
+async def test_geckodriver_behavior(config, mocker, use_langpack):
     """Mock ``geckodriver_behavior`` for full line coverage."""
 
-    artifact_dir = os.path.join(str(tmpdir), "artifact")
-    work_dir = os.path.join(str(tmpdir), "work")
-    config = {
-        "artifact_dir": artifact_dir,
-        "work_dir": work_dir,
-        "local_notarization_accounts": ["acct0", "acct1", "acct2"],
-        "lockfile_template": os.path.join(tmpdir, "%(user)s.lock"),
-        "default_keychains": ["/Users/%(user)s/foo"],
-        "worker_user": "foo",
-        "mac_config": {
-            "dep": {
-                "notarize_type": "single_zip",
-                "signing_keychain_template": "keychain_path",
-                "base_bundle_id": "org.test",
-                "identity": "id",
-                "keychain_password": "keychain_password",
-                "pkg_cert_id": "cert_id",
-                "apple_notarization_account": "apple_account",
-                "apple_notarization_password": "apple_password",
-                "apple_asc_provider": "apple_asc_provider",
-                "notarization_poll_timeout": 2,
-            }
-        },
+    artifact_dir = config["artifact_dir"]
+    work_dir = config["work_dir"]
+    config["mac_config"]["dep"] = {
+        "notarize_type": "single_zip",
+        "signing_keychain_template": "keychain_path",
+        "base_bundle_id": "org.test",
+        "identity": "id",
+        "keychain_password": "keychain_password",
+        "pkg_cert_id": "cert_id",
+        "apple_notarization_account": "apple_account",
+        "apple_notarization_password": "apple_password",
+        "apple_asc_provider": "apple_asc_provider",
+        "notarization_poll_timeout": 2,
     }
 
     task = {
