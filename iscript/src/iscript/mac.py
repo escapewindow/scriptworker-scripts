@@ -350,7 +350,19 @@ async def sign_libclearkey(contents_dir, sudo_command, sign_command, app_path):
 
 # wrap_sign_app_with_sudo {{{1
 async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_path):
-    """
+    """Wrap ``sign_app`` with sudo.
+
+    Because we're going to run multiple concurrent tasks, we need to have
+    a keychain and keychain search path per app. The easiest way to do this
+    is to move the keychains into the notary accounts and use sudo to sign.
+
+    Args:
+        config (dict): the running script config.
+        key_config (dict): the running key config.
+        user (str): the user to sudo to.
+        app (App): the app to sign.
+        entitlements_path (str): the path to the entitlements file.
+
     """
     signing_keychain = key_config["signing_keychain_template"] % {"user": user}
     await chown(app.app_path, user)

@@ -154,15 +154,15 @@ def test_get_bundle_executable(mocker):
 # sign_geckodriver {{{1
 @pytest.mark.parametrize("exists", (True, False))
 @pytest.mark.asyncio
-async def test_sign_geckodriver(exists, mocker, tmpdir):
+async def test_sign_geckodriver(exists, mocker, config):
     """Render ``sign_geckodriver`` noop and verify we have complete code coverage.
 
     """
-    key_config = {"identity": "id", "signing_keychain": "keychain"}
-    config = {"artifact_dir": os.path.join(tmpdir, "artifacts")}
+    key_config = config["mac_config"]["dep"]
+    work_dir = config["work_dir"]
     app = mac.App(
-        orig_path=os.path.join(tmpdir, "cot/task1/public/build/geckodriver.tar.gz"),
-        parent_dir=os.path.join(tmpdir, "0"),
+        orig_path=os.path.join(work_dir, "cot/task1/public/build/geckodriver.tar.gz"),
+        parent_dir=os.path.join(work_dir, "0"),
         artifact_prefix=os.path.join("public/build"),
     )
 
@@ -170,11 +170,14 @@ async def test_sign_geckodriver(exists, mocker, tmpdir):
     if exists:
         touch(os.path.join(app.parent_dir, "geckodriver"))
     mocker.patch.object(mac, "run_command", new=noop_async)
+    mocker.patch.object(mac, "chown", new=noop_async)
+    mocker.patch.object(mac, "unlock_keychain", new=noop_async)
+    mocker.patch.object(mac, "update_keychain_search_path", new=noop_async)
     if exists:
-        await mac.sign_geckodriver(config, key_config, [app])
+        await mac.sign_geckodriver(config, key_config, "foo", [app])
     else:
         with pytest.raises(IScriptError):
-            await mac.sign_geckodriver(config, key_config, [app])
+            await mac.sign_geckodriver(config, key_config, "foo", [app])
 
 
 # sign_app {{{1
