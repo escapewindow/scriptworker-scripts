@@ -41,6 +41,7 @@ def config(tmpdir):
     config = {
         "artifact_dir": os.path.join(tmpdir, "artifact"),
         "work_dir": os.path.join(tmpdir, "work"),
+        "concurrency_limit": 3,
         "local_notarization_accounts": ["acct0", "acct1", "acct2"],
         "lockfile_template": os.path.join(tmpdir, "%(user)s.lock"),
         "lockfile_attempts": 5,
@@ -859,19 +860,23 @@ async def test_tar_apps(mocker, tmpdir, raises, artifact_prefix):
     "pkg_cert_id, raises", ((None, True), (None, False), ("pkg.cert", False))
 )
 @pytest.mark.asyncio
-async def test_create_pkg_files(mocker, pkg_cert_id, raises):
+async def test_create_pkg_files(mocker, config, pkg_cert_id, raises):
     """``create_pkg_files`` runs pkgbuild concurrently for each ``App``, and
     raises any exceptions hit along the way.
 
     """
 
     async def fake_run_command(cmd, **kwargs):
-        assert cmd[0:2] == ["sudo", "pkgbuild"]
+        assert cmd[0] == "sudo"
         if raises:
             raise IScriptError("foo")
 
-    key_config = {"pkg_cert_id": pkg_cert_id, "signing_keychain": "signing.keychain"}
-    config = {"concurrency_limit": 2}
+    key_config = {
+        "pkg_cert_id": pkg_cert_id,
+        "signing_keychain_template": "signing.keychain",
+        "keychain_password": "foo",
+    }
+    config["concurrency_limit"] = 2
     all_paths = []
     for i in range(3):
         all_paths.append(
@@ -880,6 +885,7 @@ async def test_create_pkg_files(mocker, pkg_cert_id, raises):
             )
         )
     mocker.patch.object(mac, "run_command", new=fake_run_command)
+    mocker.patch.object(mac, "unlock_keychain", new=noop_async)
     if raises:
         with pytest.raises(IScriptError):
             await mac.create_pkg_files(config, key_config, all_paths)
@@ -970,7 +976,7 @@ async def test_sign_behavior(mocker, config, use_langpack):
     work_dir = config["work_dir"]
     config["mac_config"]["dep"] = {
         "notarize_type": "",
-        "signing_keychain": "keychain_path",
+        "signing_keychain_template": "keychain_path",
         "sign_with_entitlements": False,
         "base_bundle_id": "org.test",
         "identity": "id",
