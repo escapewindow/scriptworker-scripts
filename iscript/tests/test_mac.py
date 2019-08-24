@@ -245,7 +245,7 @@ async def test_unlock_keychain_successful(results, mocker):
     child.exitstatus = 0
     child.signalstatus = None
     mocker.patch.object(pexpect, "spawn", new=partial(fake_spawn, child))
-    await mac.unlock_keychain("x", "y")
+    await mac.unlock_keychain("user", "x", "y")
 
 
 @pytest.mark.asyncio
