@@ -480,18 +480,17 @@ async def test_create_one_notarization_zipfile(mocker, tmpdir, raises):
 # sign_all_apps {{{1
 @pytest.mark.parametrize("raises", (True, False))
 @pytest.mark.asyncio
-async def test_sign_all_apps(mocker, tmpdir, raises):
+async def test_sign_all_apps(mocker, config, raises):
     """``sign_all_apps`` calls ``sign`` and raises on failure.
 
     """
     key_config = {
         "x": "y",
-        "signing_keychain": "keychain",
+        "signing_keychain_template": "keychain",
         "keychain_password": "password",
     }
+    work_dir = config["work_dir"]
     entitlements_path = "fake_entitlements_path"
-    work_dir = str(tmpdir)
-    config = {"work_dir": work_dir}
     all_paths = []
     app_paths = []
     for i in range(3):
@@ -501,15 +500,18 @@ async def test_sign_all_apps(mocker, tmpdir, raises):
             mac.App(parent_dir=os.path.join(work_dir, str(i)), app_path=app_path)
         )
 
-    async def fake_sign(arg1, arg2, arg3):
-        assert arg1 == key_config
-        assert arg2 in app_paths
-        assert arg3 == entitlements_path
+    async def fake_sign(*args):
+        assert args[0] == key_config
+        assert args[1] in app_paths
+        assert args[2] == "keychain"
+        assert args[3] in config["local_notarization_accounts"]
+        assert args[4] == entitlements_path
         if raises:
             raise IScriptError("foo")
 
     mocker.patch.object(mac, "set_app_path_and_name", return_value=None)
     mocker.patch.object(mac, "sign_app", new=fake_sign)
+    mocker.patch.object(mac, "chown", new=noop_async)
     mocker.patch.object(mac, "unlock_keychain", new=noop_async)
     mocker.patch.object(mac, "update_keychain_search_path", new=noop_async)
     mocker.patch.object(mac, "verify_app_signature", new=noop_async)
