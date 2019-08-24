@@ -14,7 +14,7 @@ default_keychains:
 dmg_prefix: dep1
 mac_config:
     dep:
-        signing_keychain: /path/to/dep.keychain
+        signing_keychain_template: "/Users/%(user)s/dep.keychain"
         supported_behaviors:
             - mac_geckodriver
             - mac_sign

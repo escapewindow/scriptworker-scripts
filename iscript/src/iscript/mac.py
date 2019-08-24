@@ -165,21 +165,16 @@ def get_bundle_executable(appdir):
 
 
 # _get_sign_command {{{1
-def _get_sign_command(identity, keychain):
-    return [
-        "codesign",
-        "-s",
-        identity,
-        "-fv",
-        "--keychain",
-        keychain,
-        "--requirement",
-        MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity},
-    ]
+def _get_sign_command(user, identity, keychain):
+    return (
+        ["sudo", "su", user, "-c"],
+        f'codesign -s "{identity}" -fv --keychain "{keychain}" --requirement'
+        + MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity},
+    )
 
 
 # sign_geckodriver {{{1
-async def sign_geckodriver(config, key_config, all_paths):
+async def sign_geckodriver(config, key_config, user, all_paths):
     """Sign geckodriver.
 
     Args:
@@ -191,10 +186,13 @@ async def sign_geckodriver(config, key_config, all_paths):
 
     """
     identity = key_config["identity"]
-    keychain = key_config["signing_keychain"]
-    sign_command = _get_sign_command(identity, keychain)
+    signing_keychain = key_config["signing_keychain_template"] % {"user": user}
+    sudo_command, sign_command = _get_sign_command(user, identity, signing_keychain)
+    await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
+    await update_keychain_search_path(config, user, signing_keychain)
 
     for app in all_paths:
+        await chown(app.app_path, user)
         app.check_required_attrs(["orig_path", "parent_dir", "artifact_prefix"])
         app.target_tar_path = "{}/{}{}".format(
             config["artifact_dir"],
@@ -207,7 +205,7 @@ async def sign_geckodriver(config, key_config, all_paths):
             raise IScriptError(f"No such file {path}!")
         await retry_async(
             run_command,
-            args=[sign_command + [file_]],
+            args=[sudo_command + [f'{sign_command} "{file_}"']],
             kwargs={
                 "cwd": app.parent_dir,
                 "exception": IScriptError,
@@ -215,6 +213,7 @@ async def sign_geckodriver(config, key_config, all_paths):
             },
             retry_exceptions=(IScriptError,),
         )
+        await chown(app.app_path, config["worker_user"])
         env = deepcopy(os.environ)
         # https://superuser.com/questions/61185/why-do-i-get-files-like-foo-in-my-tarball-on-os-x
         env["COPYFILE_DISABLE"] = "1"
@@ -232,7 +231,7 @@ async def sign_geckodriver(config, key_config, all_paths):
 
 
 # sign_app {{{1
-async def sign_app(key_config, app_path, entitlements_path):
+async def sign_app(key_config, app_path, keychain, user, entitlements_path):
     """Sign the .app.
 
     Largely taken from build-tools' ``dmg_signfile``.
@@ -240,6 +239,7 @@ async def sign_app(key_config, app_path, entitlements_path):
     Args:
         key_config (dict): the running config
         app_path (str): the path to the app to be signed (extracted)
+        user (str): the user to sudo to.
         entitlements_path (str): the path to the entitlements file for signing
 
     Raises:
@@ -250,14 +250,15 @@ async def sign_app(key_config, app_path, entitlements_path):
     parent_dir = os.path.dirname(app_path)
     app_name = os.path.basename(app_path)
     await run_command(
-        ["xattr", "-cr", app_name], cwd=parent_dir, exception=IScriptError
+        ["sudo", "su", user, "-c", f'xattr -cr "{app_name}"'],
+        cwd=parent_dir,
+        exception=IScriptError,
     )
     identity = key_config["identity"]
-    keychain = key_config["signing_keychain"]
-    sign_command = _get_sign_command(identity, keychain)
+    sudo_command, sign_command = _get_sign_command(user, identity, keychain)
 
     if key_config.get("sign_with_entitlements", False):
-        sign_command.extend(["-o", "runtime", "--entitlements", entitlements_path])
+        sign_command += f' -o runtime --entitlements "{entitlements_path}"'
 
     app_executable = get_bundle_executable(app_path)
     app_path_len = len(app_path)
@@ -270,7 +271,7 @@ async def sign_app(key_config, app_path, entitlements_path):
                 dirs.remove(dir_)
                 continue
             if dir_.endswith(".app"):
-                await sign_app(key_config, abs_dir, entitlements_path)
+                await sign_app(key_config, abs_dir, keychain, user, entitlements_path)
         if top_dir == contents_dir:
             log.debug(
                 "Skipping file iteration in %s because it's the root directory.",
@@ -290,7 +291,7 @@ async def sign_app(key_config, app_path, entitlements_path):
             dir_ = os.path.dirname(abs_file)
             await retry_async(
                 run_command,
-                args=[sign_command + [file_]],
+                args=[sudo_command + [f'{sign_command} "{file_}"']],
                 kwargs={
                     "cwd": dir_,
                     "exception": IScriptError,
@@ -299,12 +300,12 @@ async def sign_app(key_config, app_path, entitlements_path):
                 retry_exceptions=(IScriptError,),
             )
 
-    await sign_libclearkey(contents_dir, sign_command, app_path)
+    await sign_libclearkey(contents_dir, sudo_command, sign_command, app_path)
 
     # sign bundle
     await retry_async(
         run_command,
-        args=[sign_command + [app_name]],
+        args=[sudo_command + [f'{sign_command} "{app_name}"']],
         kwargs={
             "cwd": parent_dir,
             "exception": IScriptError,
@@ -314,7 +315,7 @@ async def sign_app(key_config, app_path, entitlements_path):
     )
 
 
-async def sign_libclearkey(contents_dir, sign_command, app_path):
+async def sign_libclearkey(contents_dir, sudo_command, sign_command, app_path):
     """Sign libclearkey if it exists.
 
     Special case Contents/Resources/gmp-clearkey/0.1/libclearkey.dylib
@@ -323,7 +324,8 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
 
     Args:
         contents_dir (str): the ``Contents/`` directory path
-        sign_command (list): the command to sign with
+        sudo_command (list): the sudo command list
+        sign_command (str): the command to sign with
         app_path (str): the path to the .app dir
 
     Raises:
@@ -336,7 +338,7 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
         if os.path.exists(os.path.join(dir_, file_)):
             await retry_async(
                 run_command,
-                args=[sign_command + [file_]],
+                args=[sudo_command + [f'{sign_command} "{file_}"']],
                 kwargs={
                     "cwd": dir_,
                     "exception": IScriptError,
@@ -350,16 +352,14 @@ async def sign_libclearkey(contents_dir, sign_command, app_path):
 async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_path):
     """
     """
-    chown(app.app_path, user)
-    # TODO unlock_keychain with sudo
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
+    signing_keychain = key_config["signing_keychain_template"] % {"user": user}
+    await chown(app.app_path, user)
+    await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
+    await update_keychain_search_path(config, user, signing_keychain)
+    await asyncio.ensure_future(
+        sign_app(key_config, app.app_path, signing_keychain, user, entitlements_path)
     )
-    # TODO update_keychain_search_path with sudo
-    await update_keychain_search_path(config, key_config["signing_keychain"])
-    # TODO sign_app with sudo
-    await asyncio.ensure_future(sign_app(key_config, app.app_path, entitlements_path))
-    chown(app.app_path, config["worker_user"])
+    await chown(app.app_path, config["worker_user"])
 
 
 # verify_app_signature {{{1
@@ -386,10 +386,11 @@ async def verify_app_signature(key_config, app):
 
 
 # unlock_keychain {{{1
-async def unlock_keychain(signing_keychain, keychain_password):
+async def unlock_keychain(user, signing_keychain, keychain_password):
     """Unlock the signing keychain.
 
     Args:
+        user (str): the user to sudo to.
         signing_keychain (str): the path to the signing keychain
         keychain_password (str): the keychain password
 
@@ -400,7 +401,9 @@ async def unlock_keychain(signing_keychain, keychain_password):
     """
     log.info("Unlocking signing keychain {}".format(signing_keychain))
     child = pexpect.spawn(
-        "security", ["unlock-keychain", signing_keychain], encoding="utf-8"
+        "sudo",
+        ["su", "user", "-c", "unlock-keychain {}".format(signing_keychain)],
+        encoding="utf-8",
     )
     try:
         while True:
@@ -426,7 +429,7 @@ async def unlock_keychain(signing_keychain, keychain_password):
         )
 
 
-async def update_keychain_search_path(config, signing_keychain):
+async def update_keychain_search_path(config, user, signing_keychain):
     """Add the signing keychain to the keychain search path.
 
     Mac signing is failing without this, and works with it. In addition, if we
@@ -437,24 +440,19 @@ async def update_keychain_search_path(config, signing_keychain):
 
     Args:
         config (dict): the running config
+        user (str): the user to sudo to.
         signing_keychain (str): the path to the signing keychain
 
     Raises:
         IScriptError: on failure
 
     """
-    await run_command(
-        ["security", "list-keychains", "-s", signing_keychain]
-        + config.get(
-            "default_keychains",
-            [
-                f"{os.environ['HOME']}/Library/Keychains/login.keychain-db",
-                "/Library/Keychains/System.keychain",
-            ],
-        ),
-        cwd=config["work_dir"],
-        exception=IScriptError,
+    command = 'security list-keychains -s "{}"'.format(
+        signing_keychain + " {}".format(path % {"user": user})
+        for path in config["default_keychains"]
     )
+    sudo_command = ["sudo", "su", user, "-c", command]
+    await run_command(sudo_command, cwd=config["work_dir"], exception=IScriptError)
 
 
 # get_app_dir {{{1
@@ -1050,6 +1048,30 @@ async def tar_apps(config, all_paths):
 
 
 # create_pkg_files {{{1
+async def _pkg_helper(key_config, user, signing_keychain, app):
+    pkg_opts = []
+    if key_config.get("pkg_cert_id"):
+        pkg_opts = ["--sign", key_config["pkg_cert_id"]]
+    await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
+    await update_keychain_search_path(config, user, signing_keychain)
+    await run_command(
+        [
+            "sudo",
+            "pkgbuild",
+            "--keychain",
+            signing_keychain,
+            "--install-location",
+            "/Applications",
+            "--component",
+            app.app_path,
+            app.pkg_path,
+        ]
+        + pkg_opts,
+        cwd=app.parent_dir,
+        exception=IScriptError,
+    )
+
+
 async def create_pkg_files(config, key_config, all_paths):
     """Create .pkg installers from the .app files.
 
@@ -1063,38 +1085,18 @@ async def create_pkg_files(config, key_config, all_paths):
     """
     log.info("Creating PKG files")
     futures = []
-    # TODO shift to lockfile
     semaphore = asyncio.Semaphore(config.get("concurrency_limit", 2))
+    lockfile_map = get_lockfile_map(config)
     for app in all_paths:
-        # call set_app_path_and_name because we may not have called sign_app() earlier
+        # call set_app_path_and_name; we may not have called sign_app() earlier
         set_app_path_and_name(app)
         app.pkg_path = app.app_path.replace(".app", ".pkg")
         app.pkg_name = os.path.basename(app.pkg_path)
-        pkg_opts = []
-        if key_config.get("pkg_cert_id"):
-            pkg_opts = ["--sign", key_config["pkg_cert_id"]]
+        lf = LockfileFuture(
+            _pkg_helper, lockfile_map, args=(key_config, user, signing_keychain, app)
+        )
         futures.append(
-            asyncio.ensure_future(
-                semaphore_wrapper(
-                    semaphore,
-                    run_command(
-                        [
-                            "sudo",
-                            "pkgbuild",
-                            "--keychain",
-                            key_config["signing_keychain"],
-                            "--install-location",
-                            "/Applications",
-                            "--component",
-                            app.app_path,
-                            app.pkg_path,
-                        ]
-                        + pkg_opts,
-                        cwd=app.parent_dir,
-                        exception=IScriptError,
-                    ),
-                )
-            )
+            asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
         )
     await raise_future_exceptions(futures)
 
@@ -1183,12 +1185,6 @@ async def notarize_behavior(config, task):
     await tar_apps(config, all_paths)
 
     # pkg
-    # Unlock keychain again in case it's locked since previous unlock
-    # TODO shift to lockfile
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     await create_pkg_files(config, key_config, all_paths)
     await copy_pkgs_to_artifact_dir(config, all_paths)
 
@@ -1247,11 +1243,6 @@ async def sign_and_pkg_behavior(config, task):
     await tar_apps(config, all_paths)
 
     # pkg
-    # TODO shift to lockfile
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
-    )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
     await create_pkg_files(config, key_config, all_paths)
     await copy_pkgs_to_artifact_dir(config, all_paths)
 
@@ -1278,10 +1269,10 @@ async def geckodriver_behavior(config, task):
         await sign_langpacks(config, key_config, langpack_apps)
         all_paths = filter_apps(all_paths, fmt="autograph_langpack", inverted=True)
     await extract_all_apps(config, all_paths)
-    await unlock_keychain(
-        key_config["signing_keychain"], key_config["keychain_password"]
+    lockfile_map = get_lockfile_map(config)
+    lf = LockfileFuture(
+        sign_geckodriver, lockfile_map, args=(config, key_config, "%(user)s", all_paths)
     )
-    await update_keychain_search_path(config, key_config["signing_keychain"])
-    await sign_geckodriver(config, key_config, all_paths)
+    await lf.run_with_lockfile()
 
     log.info("Done signing geckodriver.")
