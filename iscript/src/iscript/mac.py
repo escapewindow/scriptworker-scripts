@@ -13,7 +13,6 @@ import plistlib
 import re
 import shlex
 from shutil import copy2
-import sys
 
 from scriptworker_client.aio import (
     download_file,
