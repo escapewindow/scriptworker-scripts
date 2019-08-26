@@ -195,30 +195,27 @@ async def sign_geckodriver(config, key_config, user, all_paths):
     await update_keychain_search_path(config, user, signing_keychain)
 
     for app in all_paths:
-        try:
-            await chown(app.app_path, user)
-            app.check_required_attrs(["orig_path", "parent_dir", "artifact_prefix"])
-            app.target_tar_path = "{}/{}{}".format(
-                config["artifact_dir"],
-                app.artifact_prefix,
-                app.orig_path.split(app.artifact_prefix)[1],
-            )
-            file_ = "geckodriver"
-            path = os.path.join(app.parent_dir, file_)
-            if not os.path.exists(path):
-                raise IScriptError(f"No such file {path}!")
-            await retry_async(
-                run_command,
-                args=[sudo_command + [f'{sign_command} "{file_}"']],
-                kwargs={
-                    "cwd": app.parent_dir,
-                    "exception": IScriptError,
-                    "output_log_on_exception": True,
-                },
-                retry_exceptions=(IScriptError,),
-            )
-        finally:
-            await chown(app.app_path, config["worker_user"])
+        await chown(app.app_path, user)
+        app.check_required_attrs(["orig_path", "parent_dir", "artifact_prefix"])
+        app.target_tar_path = "{}/{}{}".format(
+            config["artifact_dir"],
+            app.artifact_prefix,
+            app.orig_path.split(app.artifact_prefix)[1],
+        )
+        file_ = "geckodriver"
+        path = os.path.join(app.parent_dir, file_)
+        if not os.path.exists(path):
+            raise IScriptError(f"No such file {path}!")
+        await retry_async(
+            run_command,
+            args=[sudo_command + [f'{sign_command} "{file_}"']],
+            kwargs={
+                "cwd": app.parent_dir,
+                "exception": IScriptError,
+                "output_log_on_exception": True,
+            },
+            retry_exceptions=(IScriptError,),
+        )
         env = deepcopy(os.environ)
         # https://superuser.com/questions/61185/why-do-i-get-files-like-foo-in-my-tarball-on-os-x
         env["COPYFILE_DISABLE"] = "1"
@@ -370,17 +367,14 @@ async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_pa
 
     """
     signing_keychain = key_config["signing_keychain_template"] % {"user": user}
-    try:
-        await chown(app.app_path, user)
-        await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
-        await update_keychain_search_path(config, user, signing_keychain)
-        await asyncio.ensure_future(
-            sign_app(
-                key_config, app.app_path, signing_keychain, user, entitlements_path
-            )
+    await chown(app.app_path, user)
+    await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
+    await update_keychain_search_path(config, user, signing_keychain)
+    await asyncio.ensure_future(
+        sign_app(
+            key_config, app.app_path, signing_keychain, user, entitlements_path
         )
-    finally:
-        await chown(app.app_path, config["worker_user"])
+    )
 
 
 # verify_app_signature {{{1
@@ -725,7 +719,10 @@ async def sign_all_apps(config, key_config, entitlements_path, all_paths):
         futures.append(
             asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
         )
-    await raise_future_exceptions(futures)
+    try:
+        await raise_future_exceptions(futures)
+    finally:
+        await chown(config["work_dir"], config["worker_user"])
     # verify signatures
     futures = []
     for app in all_paths:
@@ -1313,6 +1310,9 @@ async def geckodriver_behavior(config, task):
             "sleep": config.get("lockfile_sleep_seconds", 30),
         },
     )
-    await lf.run_with_lockfile()
+    try:
+        await lf.run_with_lockfile()
+    finally:
+        await chown(config["work_dir"], config["worker_user"])
 
     log.info("Done signing geckodriver.")
