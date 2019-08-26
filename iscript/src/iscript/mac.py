@@ -844,6 +844,9 @@ async def wrap_notarization_with_sudo(
         app.notarization_log_path = f"{app.parent_dir}-notarization.log"
         bundle_id = get_bundle_id(key_config["base_bundle_id"], counter=str(counter))
         zip_path = getattr(app, path_attr)
+        # for some reason `wrap_with_sudo` doesn't work with this.
+        # current theory: `shlex.quote` does more than
+        # `subprocess.list2cmdline` in quoting special characters ?
         base_cmdln = " ".join(
             [
                 "xcrun",
