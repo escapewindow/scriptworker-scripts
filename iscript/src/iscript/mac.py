@@ -373,7 +373,9 @@ async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_pa
         await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
         await update_keychain_search_path(config, user, signing_keychain)
         await asyncio.ensure_future(
-            sign_app(key_config, app.app_path, signing_keychain, user, entitlements_path)
+            sign_app(
+                key_config, app.app_path, signing_keychain, user, entitlements_path
+            )
         )
     finally:
         await chown(app.app_path, config["worker_user"])
@@ -442,8 +444,7 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
     if child.exitstatus != 0 or child.signalstatus is not None:
         raise IScriptError(
             "Failed unlocking {}! exit {} signal {} dir {}".format(
-                signing_keychain, child.exitstatus, child.signalstatus,
-                dir(child),
+                signing_keychain, child.exitstatus, child.signalstatus, dir(child)
             )
         )
 
