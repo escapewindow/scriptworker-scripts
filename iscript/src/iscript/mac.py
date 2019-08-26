@@ -850,7 +850,7 @@ async def wrap_notarization_with_sudo(
             "-f",
             zip_path,
             "--primary-bundle-id",
-            '"{}"'.format(bundle_id),
+            bundle_id,
             "-u",
             key_config["apple_notarization_account"],
             "--asc-provider",
