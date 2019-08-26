@@ -11,7 +11,6 @@ import os
 import pexpect
 import plistlib
 import re
-import shlex
 from shutil import copy2
 
 from scriptworker_client.aio import (
@@ -22,7 +21,13 @@ from scriptworker_client.aio import (
     LockfileFuture,
 )
 from scriptworker_client.exceptions import DownloadError
-from scriptworker_client.utils import get_artifact_path, makedirs, rm, run_command
+from scriptworker_client.utils import (
+    get_artifact_path,
+    makedirs,
+    rm,
+    run_command,
+    wrap_with_sudo,
+)
 from iscript.exceptions import (
     InvalidNotarization,
     IScriptError,
@@ -166,16 +171,16 @@ def get_bundle_executable(appdir):
 
 # _get_sign_command {{{1
 def _get_sign_command(key_config, user, keychain):
-    identity = key_config["identity"]
-    requirements = ""
+    cmd = ["codesign", "-s", key_config["identity"], "-fv", "--keychain", keychain]
     if key_config.get("use_mac_designated_requirements", True):
-        requirements = ' --requirements "{}"'.format(
-            MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity}
+        cmd.extend(
+            [
+                "--requirement",
+                MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": key_config["identity"]},
+            ]
         )
-    return (
-        ["sudo", "su", user, "-c"],
-        f'codesign -s "{identity}" -fv --keychain "{keychain}"{requirements}',
-    )
+
+    return cmd
 
 
 # sign_geckodriver {{{1
@@ -190,9 +195,8 @@ async def sign_geckodriver(config, key_config, user, all_paths):
         IScriptError: on error.
 
     """
-    identity = key_config["identity"]
     signing_keychain = key_config["signing_keychain_template"] % {"user": user}
-    sudo_command, sign_command = _get_sign_command(key_config, user, signing_keychain)
+    sign_command = _get_sign_command(key_config, user, signing_keychain)
     await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
     await update_keychain_search_path(config, user, signing_keychain)
 
@@ -210,7 +214,7 @@ async def sign_geckodriver(config, key_config, user, all_paths):
             raise IScriptError(f"No such file {path}!")
         await retry_async(
             run_command,
-            args=[sudo_command + [f'{sign_command} "{file_}"']],
+            args=[wrap_with_sudo(user, sign_command + [file_])],
             kwargs={
                 "cwd": app.parent_dir,
                 "exception": IScriptError,
@@ -254,15 +258,14 @@ async def sign_app(key_config, app_path, keychain, user, entitlements_path):
     parent_dir = os.path.dirname(app_path)
     app_name = os.path.basename(app_path)
     await run_command(
-        ["sudo", "su", user, "-c", f'xattr -cr "{app_name}"'],
+        wrap_with_sudo(user, ["xattr", "-cr", app_name]),
         cwd=parent_dir,
         exception=IScriptError,
     )
-    identity = key_config["identity"]
-    sudo_command, sign_command = _get_sign_command(key_config, user, keychain)
+    sign_command = _get_sign_command(key_config, user, keychain)
 
     if key_config.get("sign_with_entitlements", False):
-        sign_command += f' -o runtime --entitlements "{entitlements_path}"'
+        sign_command.extend(["-o", "runtime", "--entitlements", entitlements_path])
 
     app_executable = get_bundle_executable(app_path)
     app_path_len = len(app_path)
@@ -295,7 +298,7 @@ async def sign_app(key_config, app_path, keychain, user, entitlements_path):
             dir_ = os.path.dirname(abs_file)
             await retry_async(
                 run_command,
-                args=[sudo_command + [f'{sign_command} "{file_}"']],
+                args=[wrap_with_sudo(user, sign_command + [file_])],
                 kwargs={
                     "cwd": dir_,
                     "exception": IScriptError,
@@ -304,12 +307,12 @@ async def sign_app(key_config, app_path, keychain, user, entitlements_path):
                 retry_exceptions=(IScriptError,),
             )
 
-    await sign_libclearkey(contents_dir, sudo_command, sign_command, app_path)
+    await sign_libclearkey(contents_dir, user, sign_command, app_path)
 
     # sign bundle
     await retry_async(
         run_command,
-        args=[sudo_command + [f'{sign_command} "{app_name}"']],
+        args=[wrap_with_sudo(user, sign_command + [app_name])],
         kwargs={
             "cwd": parent_dir,
             "exception": IScriptError,
@@ -319,7 +322,7 @@ async def sign_app(key_config, app_path, keychain, user, entitlements_path):
     )
 
 
-async def sign_libclearkey(contents_dir, sudo_command, sign_command, app_path):
+async def sign_libclearkey(contents_dir, user, sign_command, app_path):
     """Sign libclearkey if it exists.
 
     Special case Contents/Resources/gmp-clearkey/0.1/libclearkey.dylib
@@ -328,8 +331,7 @@ async def sign_libclearkey(contents_dir, sudo_command, sign_command, app_path):
 
     Args:
         contents_dir (str): the ``Contents/`` directory path
-        sudo_command (list): the sudo command list
-        sign_command (str): the command to sign with
+        sign_command (list): the command to sign with
         app_path (str): the path to the .app dir
 
     Raises:
@@ -342,7 +344,7 @@ async def sign_libclearkey(contents_dir, sudo_command, sign_command, app_path):
         if os.path.exists(os.path.join(dir_, file_)):
             await retry_async(
                 run_command,
-                args=[sudo_command + [f'{sign_command} "{file_}"']],
+                args=[wrap_with_sudo(user, sign_command + [file_])],
                 kwargs={
                     "cwd": dir_,
                     "exception": IScriptError,
@@ -415,11 +417,8 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
 
     """
     log.info("Unlocking signing keychain {}".format(signing_keychain))
-    child = pexpect.spawn(
-        "sudo",
-        ["su", user, "-c", "security unlock-keychain {}".format(signing_keychain)],
-        encoding="utf-8",
-    )
+    cmd = wrap_with_sudo(user, ["security", "unlock-keychain", signing_keychain])
+    child = pexpect.spawn(cmd[0], cmd[1:], encoding="utf-8")
     try:
         while True:
             index = await child.expect(
@@ -462,21 +461,19 @@ async def update_keychain_search_path(config, user, signing_keychain):
         IScriptError: on failure
 
     """
-    paths = [
-        path % {"user": user}
-        for path in config.get(
-            "default_keychains",
-            [
-                "/Users/%(user)s/Library/Keychains/login.keychain-db",
-                "/Library/Keychains/System.keychain",
-            ],
-        )
-    ]
-    command = 'security list-keychains -s "{}"'.format(
-        signing_keychain + " {}".join(paths)
+    command = ["security", "list-keychains", "-s", signing_keychain]
+    for path in config.get(
+        "default_keychains",
+        [
+            "/Users/%(user)s/Library/Keychains/login.keychain-db",
+            "/Library/Keychains/System.keychain",
+        ],
+    ):
+        command.append(path % {"user": user})
+
+    await run_command(
+        wrap_with_sudo(user, command), cwd=config["work_dir"], exception=IScriptError
     )
-    sudo_command = ["sudo", "su", user, "-c", command]
-    await run_command(sudo_command, cwd=config["work_dir"], exception=IScriptError)
 
 
 # get_app_dir {{{1
@@ -853,31 +850,26 @@ async def wrap_notarization_with_sudo(
         app.notarization_log_path = f"{app.parent_dir}-notarization.log"
         bundle_id = get_bundle_id(key_config["base_bundle_id"], counter=str(counter))
         zip_path = getattr(app, path_attr)
-        base_cmdln = " ".join(
-            [
-                "xcrun",
-                "altool",
-                "--notarize-app",
-                "-f",
-                zip_path,
-                "--primary-bundle-id",
-                '"{}"'.format(bundle_id),
-                "-u",
-                key_config["apple_notarization_account"],
-                "--asc-provider",
-                key_config["apple_asc_provider"],
-                "--password",
-            ]
-        )
-        cmd = [
-            "sudo",
-            "su",
-            "%(user)s",
-            "-c",
-            base_cmdln
-            + " {}".format(shlex.quote(key_config["apple_notarization_password"])),
+        base_cmdln = [
+            "xcrun",
+            "altool",
+            "--notarize-app",
+            "-f",
+            zip_path,
+            "--primary-bundle-id",
+            '"{}"'.format(bundle_id),
+            "-u",
+            key_config["apple_notarization_account"],
+            "--asc-provider",
+            key_config["apple_asc_provider"],
+            "--password",
         ]
-        log_cmd = ["sudo", "su", "%(user)s", "-c", base_cmdln + " ********"]
+        cmd = (
+            wrap_with_sudo(
+                "%(user)s", base_cmdln + [key_config["apple_notarization_password"]]
+            ),
+        )
+        log_cmd = wrap_with_sudo("%(user)s", base_cmdln + ["********"])
         lf = LockfileFuture(
             run_command,
             lockfile_map,
