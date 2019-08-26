@@ -421,10 +421,9 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
     log.info("Unlocking signing keychain {}".format(signing_keychain))
     child = pexpect.spawn(
         "sudo",
-        ["su", "user", "-c", "security unlock-keychain {}".format(signing_keychain)],
+        ["su", user, "-c", "security unlock-keychain {}".format(signing_keychain)],
         encoding="utf-8",
     )
-    child.logfile_send = sys.stdout
     try:
         while True:
             index = await child.expect(
@@ -443,8 +442,8 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
     child.close()
     if child.exitstatus != 0 or child.signalstatus is not None:
         raise IScriptError(
-            "Failed unlocking {}! exit {} signal {} dir {}".format(
-                signing_keychain, child.exitstatus, child.signalstatus, dir(child)
+            "Failed unlocking {}! exit {} signal {}".format(
+                signing_keychain, child.exitstatus, child.signalstatus
             )
         )
 
