@@ -1080,7 +1080,6 @@ async def _pkg_helper(config, key_config, user, app):
         wrap_with_sudo(
             user,
             [
-                "sudo",
                 "pkgbuild",
                 "--keychain",
                 signing_keychain,
