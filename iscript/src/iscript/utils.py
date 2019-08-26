@@ -6,7 +6,7 @@ Attributes:
 
 """
 import logging
-from subprocess import list2cmdline
+import subprocess
 
 from scriptworker_client.utils import run_command
 from iscript.exceptions import IScriptError
@@ -89,6 +89,7 @@ async def chown(path, user, group=None, exception=IScriptError, **kwargs):
     await run_command(command, exception=exception, **kwargs)
 
 
+# wrap_with_sudo {{{1
 def wrap_with_sudo(user, cmd_list):
     """Wrap a list command with ``sudo su user -c``.
 
