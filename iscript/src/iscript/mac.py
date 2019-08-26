@@ -169,10 +169,12 @@ def _get_sign_command(key_config, user, keychain):
     identity = key_config["identity"]
     requirements = ""
     if key_config.get("use_mac_designated_requirements", True):
-        requirements = ' --requirements "{}"'.format(MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity})
+        requirements = ' --requirements "{}"'.format(
+            MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity}
+        )
     return (
         ["sudo", "su", user, "-c"],
-        f'codesign -s "{identity}" -fv --keychain "{keychain}"{requirements}'
+        f'codesign -s "{identity}" -fv --keychain "{keychain}"{requirements}',
     )
 
 
@@ -371,9 +373,7 @@ async def wrap_sign_app_with_sudo(config, key_config, user, app, entitlements_pa
     await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
     await update_keychain_search_path(config, user, signing_keychain)
     await asyncio.ensure_future(
-        sign_app(
-            key_config, app.app_path, signing_keychain, user, entitlements_path
-        )
+        sign_app(key_config, app.app_path, signing_keychain, user, entitlements_path)
     )
 
 
