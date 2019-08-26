@@ -462,8 +462,8 @@ async def update_keychain_search_path(config, user, signing_keychain):
         IScriptError: on failure
 
     """
-    command = 'security list-keychains -s "{}"'.format(
-        signing_keychain + " {}".format(path % {"user": user})
+    paths = [
+        path % {"user": user}
         for path in config.get(
             "default_keychains",
             [
@@ -471,6 +471,9 @@ async def update_keychain_search_path(config, user, signing_keychain):
                 "/Library/Keychains/System.keychain",
             ],
         )
+    ]
+    command = 'security list-keychains -s "{}"'.format(
+        signing_keychain + " {}".join(paths)
     )
     sudo_command = ["sudo", "su", user, "-c", command]
     await run_command(sudo_command, cwd=config["work_dir"], exception=IScriptError)
