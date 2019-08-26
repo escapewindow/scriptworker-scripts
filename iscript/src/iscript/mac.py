@@ -13,6 +13,7 @@ import plistlib
 import re
 import shlex
 from shutil import copy2
+import sys
 
 from scriptworker_client.aio import (
     download_file,
@@ -421,6 +422,7 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
         ["su", "user", "-c", "security unlock-keychain {}".format(signing_keychain)],
         encoding="utf-8",
     )
+    child.logfile = sys.stdout.buffer
     try:
         while True:
             index = await child.expect(
