@@ -1077,18 +1077,20 @@ async def _pkg_helper(config, key_config, user, app):
     await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
     await update_keychain_search_path(config, user, signing_keychain)
     await run_command(
-        [
-            "sudo",
-            "pkgbuild",
-            "--keychain",
-            signing_keychain,
-            "--install-location",
-            "/Applications",
-            "--component",
-            app.app_path,
-            app.pkg_path,
-        ]
-        + pkg_opts,
+        wrap_with_sudo(
+            user,
+            [
+                "pkgbuild",
+                "--keychain",
+                signing_keychain,
+                "--install-location",
+                "/Applications",
+                "--component",
+                app.app_path,
+                app.pkg_path,
+            ]
+            + pkg_opts,
+        ),
         cwd=app.parent_dir,
         exception=IScriptError,
     )
