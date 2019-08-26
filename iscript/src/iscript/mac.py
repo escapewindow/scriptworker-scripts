@@ -441,8 +441,9 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
     child.close()
     if child.exitstatus != 0 or child.signalstatus is not None:
         raise IScriptError(
-            "Failed unlocking {}! exit {} signal {}".format(
-                signing_keychain, child.exitstatus, child.signalstatus
+            "Failed unlocking {}! exit {} signal {} dir {}".format(
+                signing_keychain, child.exitstatus, child.signalstatus,
+                dir(child),
             )
         )
 
