@@ -165,11 +165,14 @@ def get_bundle_executable(appdir):
 
 
 # _get_sign_command {{{1
-def _get_sign_command(user, identity, keychain):
+def _get_sign_command(key_config, user, keychain):
+    identity = key_config["identity"]
+    requirements = ""
+    if key_config.get("use_mac_designated_requirements", True):
+        requirements = ' --requirements "{}"'.format(MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity})
     return (
         ["sudo", "su", user, "-c"],
-        f'codesign -s "{identity}" -fv --keychain "{keychain}" --requirement "%s"'
-        % (MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity},),
+        f'codesign -s "{identity}" -fv --keychain "{keychain}"{requirements}'
     )
 
 
@@ -187,7 +190,7 @@ async def sign_geckodriver(config, key_config, user, all_paths):
     """
     identity = key_config["identity"]
     signing_keychain = key_config["signing_keychain_template"] % {"user": user}
-    sudo_command, sign_command = _get_sign_command(user, identity, signing_keychain)
+    sudo_command, sign_command = _get_sign_command(key_config, user, signing_keychain)
     await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
     await update_keychain_search_path(config, user, signing_keychain)
 
@@ -257,7 +260,7 @@ async def sign_app(key_config, app_path, keychain, user, entitlements_path):
         exception=IScriptError,
     )
     identity = key_config["identity"]
-    sudo_command, sign_command = _get_sign_command(user, identity, keychain)
+    sudo_command, sign_command = _get_sign_command(key_config, user, keychain)
 
     if key_config.get("sign_with_entitlements", False):
         sign_command += f' -o runtime --entitlements "{entitlements_path}"'
