@@ -42,11 +42,11 @@ log = logging.getLogger(__name__)
 
 
 MAC_DESIGNATED_REQUIREMENTS = (
-    """'=designated => ( """
+    """=designated => ("""
     """(anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.9] ) """
     """or (anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] """
     """and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate """
-    """leaf[subject.OU] = "%(subject_ou)s"))'"""
+    """leaf[subject.OU] = '%(subject_ou)s'))"""
 )
 
 KNOWN_ARTIFACT_PREFIXES = ("public/", "releng/partner/")
@@ -169,8 +169,8 @@ def get_bundle_executable(appdir):
 def _get_sign_command(user, identity, keychain):
     return (
         ["sudo", "su", user, "-c"],
-        f'codesign -s "{identity}" -fv --keychain "{keychain}" --requirement'
-        + MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity},
+        f'codesign -s "{identity}" -fv --keychain "{keychain}" --requirement "%s"'
+        % (MAC_DESIGNATED_REQUIREMENTS % {"subject_ou": identity},),
     )
 
 
