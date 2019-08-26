@@ -414,7 +414,7 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
     log.info("Unlocking signing keychain {}".format(signing_keychain))
     child = pexpect.spawn(
         "sudo",
-        ["su", "user", "-c", "unlock-keychain {}".format(signing_keychain)],
+        ["su", "user", "-c", "security unlock-keychain {}".format(signing_keychain)],
         encoding="utf-8",
     )
     try:
