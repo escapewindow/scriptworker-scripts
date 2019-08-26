@@ -11,6 +11,7 @@ import os
 import pexpect
 import plistlib
 import re
+import shlex
 from shutil import copy2
 
 from scriptworker_client.aio import (
@@ -843,31 +844,31 @@ async def wrap_notarization_with_sudo(
         app.notarization_log_path = f"{app.parent_dir}-notarization.log"
         bundle_id = get_bundle_id(key_config["base_bundle_id"], counter=str(counter))
         zip_path = getattr(app, path_attr)
-            base_cmdln = " ".join(
-                [
-                    "xcrun",
-                    "altool",
-                    "--notarize-app",
-                    "-f",
-                    zip_path,
-                    "--primary-bundle-id",
-                    '"{}"'.format(bundle_id),
-                    "-u",
-                    key_config["apple_notarization_account"],
-                    "--asc-provider",
-                    key_config["apple_asc_provider"],
-                    "--password",
-                ]
-            )
-            cmd = [
-                "sudo",
-                "su",
-                "%(user)s",
-                "-c",
-                base_cmdln
-                + " {}".format(shlex.quote(key_config["apple_notarization_password"])),
+        base_cmdln = " ".join(
+            [
+                "xcrun",
+                "altool",
+                "--notarize-app",
+                "-f",
+                zip_path,
+                "--primary-bundle-id",
+                '"{}"'.format(bundle_id),
+                "-u",
+                key_config["apple_notarization_account"],
+                "--asc-provider",
+                key_config["apple_asc_provider"],
+                "--password",
             ]
-            log_cmd = ["sudo", "su", "%(user)s", "-c", base_cmdln + " ********"]
+        )
+        cmd = [
+            "sudo",
+            "su",
+            "%(user)s",
+            "-c",
+            base_cmdln
+            + " {}".format(shlex.quote(key_config["apple_notarization_password"])),
+        ]
+        log_cmd = ["sudo", "su", "%(user)s", "-c", base_cmdln + " ********"]
         lf = LockfileFuture(
             run_command,
             lockfile_map,
