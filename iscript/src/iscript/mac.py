@@ -21,21 +21,14 @@ from scriptworker_client.aio import (
     LockfileFuture,
 )
 from scriptworker_client.exceptions import DownloadError
-from scriptworker_client.utils import (
-    get_artifact_path,
-    makedirs,
-    rm,
-    run_command,
-    wrap_with_sudo,
-)
+from scriptworker_client.utils import get_artifact_path, makedirs, rm, run_command
 from iscript.exceptions import (
     InvalidNotarization,
     IScriptError,
     TimeoutError,
     UnknownAppDir,
 )
-from iscript.utils import chown, get_key_config
-
+from iscript.utils import chown, get_key_config, wrap_with_sudo
 from iscript.autograph import (
     sign_langpacks,
     sign_omnija_with_autograph,
