@@ -422,7 +422,7 @@ async def unlock_keychain(user, signing_keychain, keychain_password):
         ["su", "user", "-c", "security unlock-keychain {}".format(signing_keychain)],
         encoding="utf-8",
     )
-    child.logfile = sys.stdout.buffer
+    child.logfile_send = sys.stdout
     try:
         while True:
             index = await child.expect(
