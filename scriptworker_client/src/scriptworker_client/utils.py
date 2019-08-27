@@ -230,7 +230,7 @@ async def run_command(
             raise exception(
                 "{} in {} exited {}!\n{}".format(log_cmd, cwd, exitcode, log_contents)
             )
-    log.info("%s in %s exited %d", log_cmd, cwd, exitcode)
+    log.info("{} in {} exited {}".format(log_cmd, cwd, exitcode))
     return exitcode
 
 

@@ -559,6 +559,7 @@ async def extract_all_apps(config, all_paths):
     log.info("Extracting all apps")
     futures = []
     work_dir = config["work_dir"]
+    work_dir_basename = os.path.basename(work_dir)
     unpack_dmg = os.path.join(os.path.dirname(__file__), "data", "unpack-diskimage")
     for counter, app in enumerate(all_paths):
         app.check_required_attrs(["orig_path"])
@@ -577,7 +578,10 @@ async def extract_all_apps(config, all_paths):
             )
         elif app.orig_path.endswith(".dmg"):
             unpack_mountpoint = os.path.join(
-                "/tmp", f"{config.get('dmg_prefix', 'dmg')}-{counter}-unpack"
+                "/tmp",
+                "{}-{}-{}-unpack".format(
+                    config.get("dmg_prefix", "dmg"), work_dir_basename, counter
+                ),
             )
             futures.append(
                 asyncio.ensure_future(
