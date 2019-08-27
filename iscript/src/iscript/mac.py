@@ -1074,6 +1074,7 @@ async def _pkg_helper(config, key_config, user, app):
     pkg_opts = []
     if key_config.get("pkg_cert_id"):
         pkg_opts = ["--sign", key_config["pkg_cert_id"]]
+    await chown(app.parent_dir, user)
     await unlock_keychain(user, signing_keychain, key_config["keychain_password"])
     await update_keychain_search_path(config, user, signing_keychain)
     await run_command(
@@ -1128,7 +1129,10 @@ async def create_pkg_files(config, key_config, all_paths):
         futures.append(
             asyncio.ensure_future(semaphore_wrapper(semaphore, lf.run_with_lockfile()))
         )
-    await raise_future_exceptions(futures)
+    try:
+        await raise_future_exceptions(futures)
+    finally:
+        await chown(config["work_dir"], config["worker_user"])
 
 
 # copy_pkgs_to_artifact_dir {{{1
