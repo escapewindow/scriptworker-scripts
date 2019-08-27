@@ -891,6 +891,7 @@ async def test_create_pkg_files(mocker, config, pkg_cert_id, raises):
             )
         )
     mocker.patch.object(mac, "run_command", new=fake_run_command)
+    mocker.patch.object(mac, "chown", new=noop_async)
     mocker.patch.object(mac, "unlock_keychain", new=noop_async)
     if raises:
         with pytest.raises(IScriptError):
