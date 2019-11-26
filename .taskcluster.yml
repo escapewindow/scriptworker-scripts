@@ -29,6 +29,8 @@ tasks:
         - ['beetmoverscript', '38',             '',                        '']
         - ['bouncerscript',   '37',             '',                        'mozilla/releng-bouncerscript']
         - ['bouncerscript',   '38',             '',                        '']
+        - ['notarization_poller',    '37',             '',                        '']
+        - ['notarization_poller',    '38',             '',                        '']
         - ['pushapkscript',   '37',             '${setup_pushapkscript}',  'mozilla/releng-pushapkscript']
         - ['pushapkscript',   '38',             '${setup_pushapkscript}',  '']
         - ['pushsnapscript',  '37',             '${setup_pushsnapscript}', 'mozilla/releng-pushsnapscript']
