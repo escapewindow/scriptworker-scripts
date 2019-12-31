@@ -1,7 +1,10 @@
 -r base.in
+# Remove regex and its pin when https://bitbucket.org/mrabarnett/mrab-regex/issues/349/no-module-named-regex_regex-regex-is-not-a is resolved
+regex==2019.11.1
 black
 check-manifest
-coverage
+# Unpin coverage when https://github.com/nedbat/coveragepy/issues/886 is resolved
+coverage==4.5.3
 flake8
 flake8_docstrings
 isort
@@ -11,6 +14,5 @@ pip-compile-multi
 python-coveralls
 pytest
 pytest-asyncio
-pytest-black
 pytest-cov
 pytest-mock
