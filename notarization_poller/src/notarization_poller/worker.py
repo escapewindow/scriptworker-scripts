@@ -18,6 +18,7 @@ import arrow
 from taskcluster.aio import Queue
 
 from notarization_poller.config import get_config_from_cmdln, update_logging_config
+from notarization_poller.constants import MAX_CLAIM_WORK_TASKS
 from notarization_poller.task import Task, claim_work
 from scriptworker_client.constants import STATUSES
 from scriptworker_client.utils import makedirs, rm
@@ -40,7 +41,10 @@ class RunTasks:
     async def invoke(self):
         """Claims and processes Taskcluster work."""
         while not self.is_cancelled:
-            num_tasks_to_claim = self.config["max_concurrent_tasks"] - len(self.running_tasks)
+            num_tasks_to_claim = min(
+                self.config["max_concurrent_tasks"] - len(self.running_tasks),
+                MAX_CLAIM_WORK_TASKS
+            )
             if num_tasks_to_claim > 0 and arrow.utcnow().timestamp - self.last_claim_work.timestamp >= self.config["claim_work_interval"]:
                 async with aiohttp.ClientSession() as session:
                     queue = Queue(

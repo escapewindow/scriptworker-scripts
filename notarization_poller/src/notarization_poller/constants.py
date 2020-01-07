@@ -12,6 +12,8 @@ from frozendict import frozendict
 
 from scriptworker_client.constants import STATUSES
 
+MAX_CLAIM_WORK_TASKS = 32
+
 DEFAULT_CONFIG = frozendict(
     {
         "log_datefmt": "%Y-%m-%dT%H:%M:%S",
