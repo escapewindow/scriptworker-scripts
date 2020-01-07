@@ -62,8 +62,8 @@ class Task:
         rm(self.task_parent_dir)
         makedirs(self.task_dir)
         self._reclaim_task = {}
-        self.reclaim_fut = event_loop.create_task(self.reclaim_task())
-        self.task_fut = event_loop.create_task(self.run_task())
+        self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
+        self.task_fut = self.event_loop.create_task(self.run_task())
 
     @property
     def task_credentials(self):
