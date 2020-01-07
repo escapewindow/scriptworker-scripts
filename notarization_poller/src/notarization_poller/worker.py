@@ -58,6 +58,7 @@ class RunTasks:
                 self.last_claim_work = arrow.utcnow()
                 for claim_task in new_tasks.get("tasks", []):
                     new_task = Task(self.config, claim_task)
+                    new_task.start()
                     self.running_tasks.append(new_task)
             await self.prune_running_tasks()
             sleep_time = self.last_claim_work.timestamp + self.config["claim_work_interval"] - arrow.utcnow().timestamp
