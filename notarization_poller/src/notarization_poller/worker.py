@@ -50,7 +50,7 @@ class RunTasks:
                         },
                         session=session,
                     )
-                    new_tasks = await self._run_cancellable(claim_work(self.config, queue, num_tasks=num_tasks_to_claim))
+                    new_tasks = await self._run_cancellable(claim_work(self.config, queue, num_tasks=num_tasks_to_claim)) or {}
                 self.last_claim_work = arrow.utcnow()
                 for claim_task in new_tasks.get("tasks", []):
                     new_task = Task(self.config, claim_task)
