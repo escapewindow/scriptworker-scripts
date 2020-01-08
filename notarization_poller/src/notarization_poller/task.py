@@ -60,8 +60,14 @@ class Task:
         rm(self.task_dir)
         makedirs(self.task_dir)
         self._reclaim_task = {}
-        self.task_fut = self.event_loop.create_task(self.run_task())
+        self.event_loop.create_task(self.async_start())
+
+    async def async_start(self):
+        """Async start the task."""
         self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
+        self.task_fut = self.event_loop.create_task(self.run_task())
+        await self.task_fut
+        await self.stop()
 
     @property
     def task_credentials(self):
@@ -99,14 +105,13 @@ class Task:
                 await self.stop(status=exit_status)
                 break
 
-    async def stop(self, status=None, kill_run_task=True):
+    async def stop(self, status=None):
         """Stop the task."""
         if status is not None:
             self.status = status
         log.info("Stopping task %s %s with status %s", self.task_id, self.run_id, self.status)
         self.reclaim_fut and self.reclaim_fut.cancel()
-        if kill_run_task and self.task_fut:
-            self.task_fut.cancel()
+        self.task_fut and self.task_fut.cancel()
         await self.upload_task()
         await self.complete_task()
         rm(self.task_dir)
@@ -195,7 +200,10 @@ class Task:
 
         """
         with open(self.log_path, "a") as log_fh:
-            print("{} {} - {}".format(arrow.utcnow().format(self.config["task_log_datefmt"]), logging._levelToName.get(level, str(level)), msg % args), file=log_fh)
+            print(
+                "{} {} - {}".format(arrow.utcnow().format(self.config["task_log_datefmt"]), logging._levelToName.get(level, str(level)), msg % args),
+                file=log_fh,
+            )
             worker_log and log.log(level, "%s:%s - {}".format(msg), self.task_id, self.run_id, *args)
 
     async def download_uuids(self):
@@ -219,9 +227,7 @@ class Task:
             self.status = STATUSES["malformed-payload"]
             self.task_log(traceback.format_exc(), level=logging.CRITICAL)
             await self.stop()
-        self.uuids = {}
-        for uuid in uuids:
-            self.uuids[uuid] = False
+        self.uuids = tuple(uuids)
         self.task_log("UUIDs: %s", self.uuids)
 
     async def run_task(self):
@@ -231,9 +237,11 @@ class Task:
         password = self.config["notarization_password"]
 
         await self.download_uuids()
+        self.pending_uuids = list(self.uuids)
         done = False
         while not done:
-            for uuid in [u for u in self.uuids if not self.uuids[u]]:
+            for uuid in self.pending_uuids:
+                self.task_log("Polling %s", uuid)
                 base_cmd = ["xcrun", "altool", "--notarization-info", uuid, "-u", username, "--password"]
                 log_cmd = base_cmd + ["********"]
                 rm(self.poll_log_path)
@@ -257,12 +265,11 @@ class Task:
                         # branch
                         if m["status"] == "success":  # pragma: no branch
                             self.task_log("UUID %s is successful", uuid)
-                            self.uuids[uuid] = True
-            if all(self.uuids.values()):
+                            self.pending_uuids.remove(uuid)
+            if len(self.pending_uuids) == 0:
                 self.task_log("All UUIDs are successfully notarized: %s", self.uuids)
                 break
             await asyncio.sleep(self.config["poll_sleep_time"])
-        await self.stop(kill_run_task=False)
 
 
 # claim_work {{{1
