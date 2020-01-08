@@ -13,16 +13,13 @@ import os
 
 from notarization_poller.constants import DEFAULT_CONFIG
 from notarization_poller.exceptions import ConfigError
-from scriptworker_client.client import init_config
+from scriptworker_client.client import init_config, _init_logging
 
 log = logging.getLogger(__name__)
 
 
-def update_logging_config(config, log_name="", file_name="worker.log"):
+def update_logging_config(config, file_name="worker.log"):
     """Update python logging settings from config.
-
-    By default, this sets the ``notarization_poller`` log settings, but this will
-    change if some other package calls this function or specifies the ``log_name``.
 
     * Use formatting from config settings.
     * Log to screen if ``verbose``
@@ -30,26 +27,19 @@ def update_logging_config(config, log_name="", file_name="worker.log"):
 
     Args:
         config (dict): the running config
-        log_name (str, optional): the name of the Logger to modify.
-            If None, use the top level module ('notarization_poller').
-            Defaults to None.
 
     """
-    log_name = log_name
-    top_level_logger = logging.getLogger(log_name)
+    _init_logging(config)
+    top_level_logger = logging.getLogger("")
 
     datefmt = config["log_datefmt"]
     fmt = config["log_fmt"]
     formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
 
-    if config.get("verbose"):
-        top_level_logger.setLevel(logging.DEBUG)
-        if len(top_level_logger.handlers) == 0:
-            handler = logging.StreamHandler()
-            handler.setFormatter(formatter)
-            top_level_logger.addHandler(handler)
-    else:
-        top_level_logger.setLevel(logging.INFO)
+    if len(top_level_logger.handlers) == 0:
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+        top_level_logger.addHandler(handler)
 
     # Rotating log file
     os.makedirs(config["log_dir"], exist_ok=True)
