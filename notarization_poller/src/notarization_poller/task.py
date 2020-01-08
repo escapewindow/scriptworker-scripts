@@ -204,7 +204,7 @@ class Task:
 
         """
         with open(self.log_path, "a") as log_fh:
-            print("{} {} - {}".format(arrow.utcnow().format(self.config["log_datefmt"]), logging._levelToName.get(level, str(level)), msg % args), file=log_fh)
+            print("{} {} - {}".format(arrow.utcnow().format(self.config["task_log_datefmt"]), logging._levelToName.get(level, str(level)), msg % args), file=log_fh)
             worker_log and log.log(level, "%s:%s - {}".format(msg), self.task_id, self.run_id, *args)
 
     async def download_uuids(self):

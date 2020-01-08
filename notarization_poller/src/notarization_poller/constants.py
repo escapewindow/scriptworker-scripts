@@ -17,6 +17,7 @@ MAX_CLAIM_WORK_TASKS = 32
 DEFAULT_CONFIG = frozendict(
     {
         "log_datefmt": "%Y-%m-%dT%H:%M:%S",
+        "task_log_datefmt": "YYYY-MM-DDTHH:mm:ss",
         "log_fmt": "%(asctime)s %(levelname)s - %(message)s",
         "log_dir": os.path.join(os.getcwd(), "logs"),
         "work_dir": os.path.join(os.getcwd(), "work"),
