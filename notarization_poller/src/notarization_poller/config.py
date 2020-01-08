@@ -18,7 +18,7 @@ from scriptworker_client.client import init_config
 log = logging.getLogger(__name__)
 
 
-def update_logging_config(config, log_name=None, file_name="worker.log"):
+def update_logging_config(config, log_name="", file_name="worker.log"):
     """Update python logging settings from config.
 
     By default, this sets the ``notarization_poller`` log settings, but this will
@@ -35,7 +35,7 @@ def update_logging_config(config, log_name=None, file_name="worker.log"):
             Defaults to None.
 
     """
-    log_name = log_name or __name__.split(".")[0]
+    log_name = log_name
     top_level_logger = logging.getLogger(log_name)
 
     datefmt = config["log_datefmt"]
