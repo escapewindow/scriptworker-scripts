@@ -52,14 +52,13 @@ class Task:
         self.run_id = claim_task["runId"]
         self.claim_task = claim_task
         self.event_loop = event_loop or asyncio.get_event_loop()
-        self.task_parent_dir = os.path.join(config["work_dir"], self.task_id)
-        self.task_dir = os.path.join(self.task_parent_dir, str(self.run_id))
+        self.task_dir = os.path.join(self.config["work_dir"], "{}-{}".format(self.task_id, self.run_id))
         self.log_path = os.path.join(self.task_dir, "live_backing.log")
         self.poll_log_path = os.path.join(self.task_dir, "polling.log")
 
     def start(self):
         """Start the task."""
-        rm(self.task_parent_dir)
+        rm(self.task_dir)
         makedirs(self.task_dir)
         self._reclaim_task = {}
         self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
