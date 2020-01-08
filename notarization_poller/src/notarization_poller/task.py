@@ -42,7 +42,6 @@ class Task:
     reclaim_fut = None
     task_fut = None
     complete = False
-    process = None
     uuids = None
 
     def __init__(self, config, claim_task, event_loop=None):
@@ -61,8 +60,8 @@ class Task:
         rm(self.task_dir)
         makedirs(self.task_dir)
         self._reclaim_task = {}
-        self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
         self.task_fut = self.event_loop.create_task(self.run_task())
+        self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
 
     @property
     def task_credentials(self):
@@ -108,14 +107,6 @@ class Task:
         self.reclaim_fut and self.reclaim_fut.cancel()
         if kill_run_task and self.task_fut:
             self.task_fut.cancel()
-        if self.process:
-            pgid = -self.process.pid
-            try:
-                os.kill(pgid, signal.SIGTERM)
-                await asyncio.sleep(1)
-                os.kill(pgid, signal.SIGKILL)
-            except (OSError, ProcessLookupError):
-                pass
         await self.upload_task()
         await self.complete_task()
         rm(self.task_dir)
