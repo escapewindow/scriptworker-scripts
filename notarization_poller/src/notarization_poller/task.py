@@ -233,6 +233,7 @@ class Task:
         self.pending_uuids = list(self.uuids)
         done = False
         while not done:
+            self.task_log("pending uuids: %s", self.pending_uuids)
             for uuid in self.pending_uuids:
                 self.task_log("Polling %s", uuid)
                 base_cmd = ["xcrun", "altool", "--notarization-info", uuid, "-u", username, "--password"]
@@ -261,8 +262,9 @@ class Task:
                             self.pending_uuids.remove(uuid)
             if len(self.pending_uuids) == 0:
                 self.task_log("All UUIDs are successfully notarized: %s", self.uuids)
-                break
-            await asyncio.sleep(self.config["poll_sleep_time"])
+                done = True
+            else:
+                await asyncio.sleep(self.config["poll_sleep_time"])
 
 
 # claim_work {{{1
@@ -282,35 +284,3 @@ async def claim_work(config, worker_queue, num_tasks=1):
         return await worker_queue.claimWork(config["provisioner_id"], config["worker_type"], payload)
     except (taskcluster.exceptions.TaskclusterFailure, aiohttp.ClientError) as exc:
         log.warning("{} {}".format(exc.__class__, exc))
-
-
-# create_temp_creds {{{1
-def create_temp_creds(client_id, access_token, start=None, expires=None, scopes=None, name=None):
-    """Request temp TC creds with our permanent creds.
-
-    Args:
-        client_id (str): the taskcluster client_id to use
-        access_token (str): the taskcluster access_token to use
-        start (str, optional): the datetime string when the credentials will
-            start to be valid.  Defaults to 10 minutes ago, for clock skew.
-        expires (str, optional): the datetime string when the credentials will
-            expire.  Defaults to 31 days after 10 minutes ago.
-        scopes (list, optional): The list of scopes to request for the temp
-            creds.  Defaults to ['assume:project:taskcluster:worker-test-scopes', ]
-        name (str, optional): the name to associate with the creds.
-
-    Returns:
-        dict: the temporary taskcluster credentials.
-
-    """
-    now = arrow.utcnow().shift(minutes=-10)
-    start = start or now.datetime
-    expires = expires or now.shift(days=31).datetime
-    scopes = scopes or ["assume:project:taskcluster:worker-test-scopes"]
-    creds = createTemporaryCredentials(client_id, access_token, start, expires, scopes, name=name)
-    for key, value in creds.items():
-        try:
-            creds[key] = value.decode("utf-8")
-        except (AttributeError, UnicodeDecodeError):
-            pass
-    return creds
