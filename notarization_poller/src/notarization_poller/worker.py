@@ -79,7 +79,9 @@ class RunTasks:
         self.is_cancelled = True
         self.future and self.future.cancel()
         try:
-            await asyncio.wait([asyncio.ensure_future(task.stop(status=status)) for task in self.running_tasks])
+            for task in self.running_tasks:
+                task.task_fut and task.task_fut.cancel()
+            await asyncio.wait([asyncio.ensure_future(task.main_fut()) for task in self.running_tasks])
         except (asyncio.CancelledError, ValueError):
             pass
 

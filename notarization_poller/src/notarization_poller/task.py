@@ -60,14 +60,20 @@ class Task:
         rm(self.task_dir)
         makedirs(self.task_dir)
         self._reclaim_task = {}
-        self.event_loop.create_task(self.async_start())
+        self.main_fut = self.event_loop.create_task(self.async_start())
 
     async def async_start(self):
         """Async start the task."""
         self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
         self.task_fut = self.event_loop.create_task(self.run_task())
         await self.task_fut
-        await self.stop()
+        log.info("Stopping task %s %s with status %s", self.task_id, self.run_id, self.status)
+        self.reclaim_fut and self.reclaim_fut.cancel()
+        self.task_fut and self.task_fut.cancel()
+        await self.upload_task()
+        await self.complete_task()
+        rm(self.task_dir)
+        self.complete = True
 
     @property
     def task_credentials(self):
@@ -102,20 +108,8 @@ class Task:
                 else:
                     log.exception("reclaim_task unexpected exception: %s %s", self.task_id, self.run_id)
                     exit_status = STATUSES["internal-error"]
-                await self.stop(status=exit_status)
+                self.task_fut and self.task_fut.cancel()
                 break
-
-    async def stop(self, status=None):
-        """Stop the task."""
-        if status is not None:
-            self.status = status
-        log.info("Stopping task %s %s with status %s", self.task_id, self.run_id, self.status)
-        self.reclaim_fut and self.reclaim_fut.cancel()
-        self.task_fut and self.task_fut.cancel()
-        await self.upload_task()
-        await self.complete_task()
-        rm(self.task_dir)
-        self.complete = True
 
     async def upload_task(self):
         """Upload artifacts and return status.
@@ -211,22 +205,8 @@ class Task:
         url = self.claim_task["task"]["payload"]["uuid_manifest"]
         path = os.path.join(self.task_dir, "uuids.json")
         self.task_log("Downloading %s", url)
-        try:
-            await retry_async(download_file, args=(url, path), retry_exceptions=(DownloadError,))
-        except Download404:
-            self.status = STATUSES["resource-unavailable"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            await self.stop()
-        except DownloadError:
-            self.status = STATUSES["intermittent-task"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            await self.stop()
-        try:
-            uuids = load_json_or_yaml(path, is_path=True)
-        except TaskError:
-            self.status = STATUSES["malformed-payload"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            await self.stop()
+        await retry_async(download_file, args=(url, path), retry_exceptions=(DownloadError,))
+        uuids = load_json_or_yaml(path, is_path=True)
         self.uuids = tuple(uuids)
         self.task_log("UUIDs: %s", self.uuids)
 
@@ -236,7 +216,20 @@ class Task:
         username = self.config["notarization_username"]
         password = self.config["notarization_password"]
 
-        await self.download_uuids()
+        try:
+            await self.download_uuids()
+        except Download404:
+            self.status = STATUSES["resource-unavailable"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
+        except DownloadError:
+            self.status = STATUSES["intermittent-task"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
+        except TaskError:
+            self.status = STATUSES["malformed-payload"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
         self.pending_uuids = list(self.uuids)
         done = False
         while not done:

@@ -24,7 +24,7 @@ DEFAULT_CONFIG = frozendict(
         "taskcluster_root_url": os.environ.get("TASKCLUSTER_ROOT_URL", "https://firefox-ci-tc.services.mozilla.com/"),
         "taskcluster_access_token": "...",
         "taskcluster_client_id": "...",
-        "claim_work_interval": 120,
+        "claim_work_interval": 30,
         "max_concurrent_tasks": 100,
         "reclaim_interval": 300,
         "artifact_upload_timeout": 120,
