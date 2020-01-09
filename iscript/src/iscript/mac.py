@@ -1103,17 +1103,21 @@ async def notarize_3_behavior(config, task):
 
     """
     all_paths = get_app_paths(config, task)
-    await extract_all_apps(config, all_paths)
-    for app in all_paths:
+    all_app_paths = list(filterfalse(lambda app: app.orig_path.endswith(".pkg"), all_paths))
+    all_pkg_paths = list(filter(lambda app: app.orig_path.endswith(".pkg"), all_paths))
+    await extract_all_apps(config, all_app_paths)
+    for app in all_app_paths:
         set_app_path_and_name(app)
-        app.pkg_path = app.app_path.replace(".app", ".pkg")
+
+    for app in all_pkg_paths:
+        app.pkg_path = app.orig_path
         app.pkg_name = os.path.basename(app.pkg_path)
 
-    await staple_notarization(all_paths, path_attr="app_path")
-    await tar_apps(config, all_paths)
+    await staple_notarization(all_app_paths, path_attr="app_path")
+    await tar_apps(config, all_app_paths)
 
-    await staple_notarization(all_paths, path_attr="pkg_path")
-    await copy_pkgs_to_artifact_dir(config, all_paths)
+    await staple_notarization(all_pkg_paths, path_attr="pkg_path")
+    await copy_pkgs_to_artifact_dir(config, all_pkg_paths)
 
     log.info("Done stapling notarization.")
 
