@@ -140,8 +140,6 @@ class Task:
             await retry_async(
                 self._upload_log,
                 retry_exceptions=(KeyError, RetryError, TypeError, aiohttp.ClientError),
-                args=(self.log_path,),
-                kwargs={"target_path": "public/logs/live_backing.log", "content_type": "text/plain", "content_encoding": "gzip"},
             )
         except aiohttp.ClientError as e:
             self.status = self.status or STATUSES["intermittent-task"]
@@ -152,7 +150,7 @@ class Task:
 
     async def _upload_log(self):
         payload = {"storageType": "s3", "expires": arrow.get(self.claim_task["task"]["expires"]).isoformat(), "contentType": "text/plain"}
-        args = [self.task_id, self.run_id, self.log_path, payload]
+        args = [self.task_id, self.run_id, 'public/logs/live_backing.log', payload]
         async with aiohttp.ClientSession() as session:
             temp_queue = Queue(options={"credentials": self.task_credentials, "rootUrl": self.config["taskcluster_root_url"]}, session=session)
             tc_response = await temp_queue.createArtifact(*args)
@@ -161,7 +159,7 @@ class Task:
             with open(self.log_path, "rb") as fh:
                 async with async_timeout.timeout(self.config["artifact_upload_timeout"]):
                     async with session.put(tc_response["putUrl"], data=fh, headers=headers, skip_auto_headers=skip_auto_headers, compress=False) as resp:
-                        log.info("create_artifact {}: {}".format(self.log_path, resp.status))
+                        log.info("create_artifact public/logs/live_backing.log: {}".format(resp.status))
                         response_text = await resp.text()
                         log.info(response_text)
                         if resp.status not in (200, 204):
