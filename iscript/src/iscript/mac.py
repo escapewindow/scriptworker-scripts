@@ -825,7 +825,7 @@ async def staple_notarization(all_paths, path_attr="app_path"):
     log.info("Stapling apps")
     futures = []
     for app in all_paths:
-        app.check_required_attrs([path_attr, "parent_dir"])
+        app.check_required_attrs([path_attr])
         cwd = os.path.dirname(getattr(app, path_attr))
         path = os.path.basename(getattr(app, path_attr))
         futures.append(
