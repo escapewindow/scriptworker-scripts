@@ -102,7 +102,7 @@ def _get_tar_create_options(path):
 
 
 def _get_pkg_name_from_tarball(path):
-    for ext in (".tar.gz", ".tar.bz2", ".dmg"):
+    for ext in (".tar.gz", ".tar.bz2", ".dmg", ".pkg"):
         if path.endswith(ext):
             return path.replace(ext, ".pkg")
     raise IScriptError("Unknown tarball suffix in path {}".format(path))
