@@ -26,10 +26,10 @@ from taskcluster.aio import Queue
 from taskcluster.client import createTemporaryCredentials
 
 from notarization_poller.constants import get_reversed_statuses
-from notarization_poller.exceptions import RetryError
+from notarization_poller.exceptions import RetryError, SupersededError
 from scriptworker_client.aio import download_file, retry_async
 from scriptworker_client.constants import STATUSES
-from scriptworker_client.exceptions import Download404, DownloadError, SupersededError, TaskError
+from scriptworker_client.exceptions import Download404, DownloadError, TaskError
 from scriptworker_client.utils import load_json_or_yaml, makedirs, rm, run_command
 
 log = logging.getLogger(__name__)
