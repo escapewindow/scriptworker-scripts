@@ -29,7 +29,7 @@ from notarization_poller.constants import get_reversed_statuses
 from notarization_poller.exceptions import RetryError
 from scriptworker_client.aio import download_file, retry_async
 from scriptworker_client.constants import STATUSES
-from scriptworker_client.exceptions import Download404, DownloadError, TaskError
+from scriptworker_client.exceptions import Download404, DownloadError, SupersededError, TaskError
 from scriptworker_client.utils import load_json_or_yaml, makedirs, rm, run_command
 
 log = logging.getLogger(__name__)
@@ -66,7 +66,21 @@ class Task:
         """Async start the task."""
         self.reclaim_fut = self.event_loop.create_task(self.reclaim_task())
         self.task_fut = self.event_loop.create_task(self.run_task())
-        await self.task_fut
+
+        try:
+            await self.task_fut
+        except Download404:
+            self.status = STATUSES["resource-unavailable"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
+        except (DownloadError, RetryError):
+            self.status = STATUSES["intermittent-task"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
+        except TaskError:
+            self.status = STATUSES["malformed-payload"]
+            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
+            return
         log.info("Stopping task %s %s with status %s", self.task_id, self.run_id, self.status)
         self.reclaim_fut and self.reclaim_fut.cancel()
         self.task_fut and self.task_fut.cancel()
@@ -216,30 +230,22 @@ class Task:
         username = self.config["notarization_username"]
         password = self.config["notarization_password"]
 
-        try:
-            await self.download_uuids()
-        except Download404:
-            self.status = STATUSES["resource-unavailable"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
-        except DownloadError:
-            self.status = STATUSES["intermittent-task"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
-        except TaskError:
-            self.status = STATUSES["malformed-payload"]
-            self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
+        await self.download_uuids()
         self.pending_uuids = list(self.uuids)
-        done = False
-        while not done:
+        while True:
             self.task_log("pending uuids: %s", self.pending_uuids)
             for uuid in self.pending_uuids:
                 self.task_log("Polling %s", uuid)
                 base_cmd = ["xcrun", "altool", "--notarization-info", uuid, "-u", username, "--password"]
                 log_cmd = base_cmd + ["********"]
                 rm(self.poll_log_path)
-                status = await run_command([base_cmd + [password]], log_cmd=log_cmd, log_path=self.poll_log_path)
+                status = await retry_async(
+                    run_command,
+                    args=[base_cmd + [password]],
+                    kwargs={"log_path": self.poll_log_path, "log_cmd": log_cmd, "exception": RetryError},
+                    retry_exceptions=(RetryError,),
+                    attempts=10,
+                )
                 with open(self.poll_log_path, "r") as fh:
                     contents = fh.read()
                 self.task_log("Polling response (status %d)", status, worker_log=False)
@@ -251,8 +257,7 @@ class Task:
                         if m["status"] == "invalid":
                             self.status = STATUSES["failure"]
                             self.task_log("Apple believes UUID %s is invalid!", uuid, level=logging.CRITICAL)
-                            done = True
-                            break
+                            raise TaskError("Apple believes UUID %s is invalid!" % uuid)
                         # There are only two possible matches with the regex
                         # Adding `pragma: no branch` to be explicit in our
                         # checks, but still avoid testing an unreachable code
@@ -262,7 +267,7 @@ class Task:
                             self.pending_uuids.remove(uuid)
             if len(self.pending_uuids) == 0:
                 self.task_log("All UUIDs are successfully notarized: %s", self.uuids)
-                done = True
+                break
             else:
                 await asyncio.sleep(self.config["poll_sleep_time"])
 
