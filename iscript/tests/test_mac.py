@@ -822,10 +822,7 @@ async def test_copy_xpis_to_artifact_dir(tmpdir, artifact_prefix):
     all_paths = []
     expected_paths = []
     for i in range(num_xpis):
-        app = mac.App(
-            artifact_prefix=artifact_prefix,
-            orig_path=os.path.join(work_dir, f"cot/taskId/{artifact_prefix}build/{i}/target-{i}.xpi"),
-        )
+        app = mac.App(artifact_prefix=artifact_prefix, orig_path=os.path.join(work_dir, f"cot/taskId/{artifact_prefix}build/{i}/target-{i}.xpi"))
         expected_path = os.path.join(artifact_dir, f"{artifact_prefix}build/{i}/target-{i}.xpi")
         expected_paths.append(expected_path)
         makedirs(os.path.dirname(app.orig_path))
