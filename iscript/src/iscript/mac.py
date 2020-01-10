@@ -934,7 +934,7 @@ async def create_pkg_files(config, key_config, all_paths):
 
 # copy_pkgs_to_artifact_dir {{{1
 async def copy_pkgs_to_artifact_dir(config, all_paths):
-    """Copy the files to the artifact directory.
+    """Copy the pkg files to the artifact directory.
 
     Args:
         config (dict): the running config
@@ -950,6 +950,24 @@ async def copy_pkgs_to_artifact_dir(config, all_paths):
         makedirs(os.path.dirname(app.target_pkg_path))
         log.debug("Copying %s to %s", app.pkg_path, app.target_pkg_path)
         copy2(app.pkg_path, app.target_pkg_path)
+
+
+# copy_xpis_to_artifact_dir {{{1
+async def copy_xpis_to_artifact_dir(config, all_paths):
+    """Copy the xpi files to the artifact directory.
+
+    Args:
+        config (dict): the running config
+        all_paths (list): the list of App objects to sign pkg for
+
+    """
+    log.info("Copying xpis to the artifact dir")
+    for app in all_paths:
+        app.check_required_attrs(["orig_path", "artifact_prefix"])
+        target_xpi_path = "{}/{}{}".format(config["artifact_dir"], app.artifact_prefix, app.orig_path.split(app.artifact_prefix)[1])
+        makedirs(os.path.dirname(target_xpi_path))
+        log.debug("Copying %s to %s", app.orig_path, target_xpi_path)
+        copy2(app.orig_path, target_xpi_path)
 
 
 # download_entitlements_file {{{1
@@ -1103,8 +1121,10 @@ async def notarize_3_behavior(config, task):
 
     """
     all_paths = get_app_paths(config, task)
-    all_app_paths = list(filterfalse(lambda app: app.orig_path.endswith(".pkg"), all_paths))
+    all_xpi_paths = list(filter(lambda app: app.orig_path.endswith(".xpi"), all_paths))
     all_pkg_paths = list(filter(lambda app: app.orig_path.endswith(".pkg"), all_paths))
+    all_app_paths = list(filterfalse(lambda app: app.orig_path.endswith((".pkg", ".xpi")), all_paths))
+
     await extract_all_apps(config, all_app_paths)
     for app in all_app_paths:
         set_app_path_and_name(app)
@@ -1118,6 +1138,8 @@ async def notarize_3_behavior(config, task):
 
     await staple_notarization(all_pkg_paths, path_attr="pkg_path")
     await copy_pkgs_to_artifact_dir(config, all_pkg_paths)
+
+    await copy_xpis_to_artifact_dir(config, all_xpi_paths)
 
     log.info("Done stapling notarization.")
 

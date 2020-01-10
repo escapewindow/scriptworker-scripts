@@ -996,7 +996,7 @@ async def test_notarize_behavior(mocker, tmpdir, notarize_type, use_langpack):
 
 
 # notarize_1_behavior {{{1
-@pytest.mark.parametrize("notarize_type,use_langpack", zip(("multi_account", "single_account","single_zip"), (False, True, False)))
+@pytest.mark.parametrize("notarize_type,use_langpack", zip(("multi_account", "single_account", "single_zip"), (False, True, False)))
 @pytest.mark.asyncio
 async def test_notarize_1_behavior(mocker, tmpdir, notarize_type, use_langpack):
     """Mock ``notarize_behavior`` for full line coverage."""
