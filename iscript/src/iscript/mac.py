@@ -956,6 +956,9 @@ async def copy_pkgs_to_artifact_dir(config, all_paths):
 async def copy_xpis_to_artifact_dir(config, all_paths):
     """Copy the xpi files to the artifact directory.
 
+    This is specifically for ``notarize_3_behavior``, since ``sign_langpacks``
+    already puts the signed xpis into the ``artifact_dir``.
+
     Args:
         config (dict): the running config
         all_paths (list): the list of App objects to sign pkg for
