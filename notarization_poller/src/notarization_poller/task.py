@@ -70,15 +70,12 @@ class Task:
         except Download404:
             self.status = STATUSES["resource-unavailable"]
             self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
         except (DownloadError, RetryError):
             self.status = STATUSES["intermittent-task"]
             self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
         except TaskError:
             self.status = STATUSES["malformed-payload"]
             self.task_log(traceback.format_exc(), level=logging.CRITICAL)
-            return
         log.info("Stopping task %s %s with status %s", self.task_id, self.run_id, self.status)
         self.reclaim_fut and self.reclaim_fut.cancel()
         self.task_fut and self.task_fut.cancel()

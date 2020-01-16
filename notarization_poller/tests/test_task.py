@@ -59,6 +59,32 @@ async def test_task_credentials(mocker, claim_task, config, event_loop):
     assert nooptask.task_credentials == expected
 
 
+# async_start {{{1
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raises, expected_status", (
+    (None, 0),
+    (Download404, STATUSES["resource-unavailable"]),
+    (DownloadError, STATUSES["intermittent-task"]),
+    (RetryError, STATUSES["intermittent-task"]),
+    (TaskError, STATUSES["malformed-payload"]),
+))
+async def test_async_start(mocker, claim_task, config, event_loop, raises, expected_status):
+
+    async def fake_run_task(*args):
+        if raises:
+            raise raises("foo")
+
+    asynctask = AsyncStartTask(config, claim_task, event_loop=event_loop)
+    asynctask.status = 0
+    asynctask.run_task = fake_run_task
+    asynctask.start()
+    await asynctask.main_fut
+    for fut in (asynctask.reclaim_fut, asynctask.task_fut):
+        assert fut.cancelled() or fut.done()
+    assert asynctask.complete
+    assert asynctask.status == expected_status
+
+
 # reclaim_task {{{1
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status_code, expected_status", ((409, STATUSES["superseded"]), (500, STATUSES["internal-error"])))
@@ -155,8 +181,9 @@ async def test_upload_log(mocker, config, claim_task, event_loop, response_statu
 )
 async def test_complete_task(mocker, config, claim_task, event_loop, status, raises, result):
 
-    asynctask = AsyncStartTask(config, claim_task, event_loop=event_loop)
-    asynctask.status = status
+    nooptask = NoOpTask(config, claim_task, event_loop=event_loop)
+    nooptask.status = status
+    nooptask._reclaim_task = {}
 
     async def fake_completed(*args):
         if raises:
@@ -174,7 +201,7 @@ async def test_complete_task(mocker, config, claim_task, event_loop, status, rai
     queue.reportFailed = fake_failed
     queue.reportException = fake_exception
     mocker.patch.object(nptask, "Queue", return_value=queue)
-    await asynctask.complete_task()
+    await nooptask.complete_task()
 
 
 # task_log {{{1
