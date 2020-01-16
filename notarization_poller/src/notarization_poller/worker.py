@@ -81,7 +81,7 @@ class RunTasks:
         try:
             for task in self.running_tasks:
                 task.task_fut and task.task_fut.cancel()
-            await asyncio.wait([asyncio.ensure_future(task.main_fut()) for task in self.running_tasks])
+            await asyncio.wait([task.main_fut for task in self.running_tasks if task.main_fut])
         except (asyncio.CancelledError, ValueError):
             pass
 

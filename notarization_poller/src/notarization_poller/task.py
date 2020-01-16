@@ -117,11 +117,11 @@ class Task:
                     self._reclaim_task = await temp_queue.reclaimTask(self.task_id, self.run_id)
             except taskcluster.exceptions.TaskclusterRestFailure as exc:
                 if exc.status_code == 409:
-                    log.warning("Stopping task %s %s after receiving 409 response from reclaim_task: %s %s", self.task_id, self.run_id)
-                    exit_status = STATUSES["superseded"]
+                    log.warning("Stopping task after receiving 409 response from reclaim_task: %s %s", self.task_id, self.run_id)
+                    self.status = STATUSES["superseded"]
                 else:
                     log.exception("reclaim_task unexpected exception: %s %s", self.task_id, self.run_id)
-                    exit_status = STATUSES["internal-error"]
+                    self.status = STATUSES["internal-error"]
                 self.task_fut and self.task_fut.cancel()
                 break
 

@@ -16,6 +16,7 @@ import notarization_poller.worker as worker
 from notarization_poller.exceptions import WorkerError
 from notarization_poller.worker import RunTasks
 from scriptworker_client.constants import STATUSES
+from . import noop_async
 
 
 # main {{{1
@@ -92,22 +93,18 @@ def test_main_running_sigusr1(mocker, config, event_loop, running):
 @pytest.mark.asyncio
 async def test_mocker_invoke(config, mocker):
     task = {"foo": "bar", "credentials": {"a": "b"}, "task": {"task_defn": True}}
-    stop_calls = []
-
     rt = worker.RunTasks(config)
 
     async def claim_work(*args, **kwargs):
         return {"tasks": [deepcopy(task)]}
 
     async def fake_sleep(*args, **kwargs):
+        await asyncio.sleep(.01)
         await rt.cancel()
-
-    async def fake_stop(status=None):
-        stop_calls.append(status)
 
     fake_task = mocker.MagicMock()
     fake_task.complete = False
-    fake_task.stop = fake_stop
+    fake_task.main_fut = asyncio.ensure_future(noop_async())
 
     mocker.patch.object(worker, "claim_work", new=claim_work)
     mocker.patch.object(worker, "Task", return_value=fake_task)
@@ -115,7 +112,6 @@ async def test_mocker_invoke(config, mocker):
     mocker.patch.object(worker, "sleep", new=fake_sleep)
     await rt.invoke()
     assert rt.is_cancelled
-    assert stop_calls == [STATUSES["worker-shutdown"]]
     assert len(rt.running_tasks) == 1
 
 

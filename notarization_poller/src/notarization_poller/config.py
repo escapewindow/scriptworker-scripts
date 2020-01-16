@@ -18,7 +18,7 @@ from scriptworker_client.client import init_config, _init_logging
 log = logging.getLogger(__name__)
 
 
-def update_logging_config(config, file_name="worker.log"):
+def update_logging_config(config, log_name="", file_name="worker.log"):
     """Update python logging settings from config.
 
     * Use formatting from config settings.
@@ -27,14 +27,22 @@ def update_logging_config(config, file_name="worker.log"):
 
     Args:
         config (dict): the running config
+        log_name (str, optional): the logger name to use. Primarily for testing.
+            Defaults to ``""``
+        file_name (str, optional): the log file path to use. Defaults to ``"worker.log"``
 
     """
     _init_logging(config)
-    top_level_logger = logging.getLogger("")
+    top_level_logger = logging.getLogger(log_name)
 
     datefmt = config["log_datefmt"]
     fmt = config["log_fmt"]
     formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+
+    if config.get("verbose"):
+        top_level_logger.setLevel(logging.DEBUG)
+    else:
+        top_level_logger.setLevel(logging.INFO)
 
     if len(top_level_logger.handlers) == 0:
         handler = logging.StreamHandler()
