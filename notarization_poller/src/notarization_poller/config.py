@@ -13,7 +13,7 @@ import os
 
 from notarization_poller.constants import DEFAULT_CONFIG
 from notarization_poller.exceptions import ConfigError
-from scriptworker_client.client import init_config, _init_logging
+from scriptworker_client.client import _init_logging, init_config
 
 log = logging.getLogger(__name__)
 

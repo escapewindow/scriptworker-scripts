@@ -15,7 +15,7 @@ import pytest
 import notarization_poller.worker as worker
 from notarization_poller.exceptions import WorkerError
 from notarization_poller.worker import RunTasks
-from scriptworker_client.constants import STATUSES
+
 from . import noop_async
 
 
@@ -99,7 +99,7 @@ async def test_mocker_invoke(config, mocker):
         return {"tasks": [deepcopy(task)]}
 
     async def fake_sleep(*args, **kwargs):
-        await asyncio.sleep(.01)
+        await asyncio.sleep(0.01)
         await rt.cancel()
 
     fake_task = mocker.MagicMock()

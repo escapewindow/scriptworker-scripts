@@ -14,7 +14,6 @@ import logging
 import os
 import pprint
 import re
-import signal
 import traceback
 
 import aiohttp
@@ -23,10 +22,9 @@ import async_timeout
 import taskcluster
 import taskcluster.exceptions
 from taskcluster.aio import Queue
-from taskcluster.client import createTemporaryCredentials
 
 from notarization_poller.constants import get_reversed_statuses
-from notarization_poller.exceptions import RetryError, SupersededError
+from notarization_poller.exceptions import RetryError
 from scriptworker_client.aio import download_file, retry_async
 from scriptworker_client.constants import STATUSES
 from scriptworker_client.exceptions import Download404, DownloadError, TaskError
@@ -137,10 +135,7 @@ class Task:
                 text_content = f_in.read()
             with gzip.open(self.log_path, "wb") as f_out:
                 f_out.write(text_content)
-            await retry_async(
-                self._upload_log,
-                retry_exceptions=(KeyError, RetryError, TypeError, aiohttp.ClientError),
-            )
+            await retry_async(self._upload_log, retry_exceptions=(KeyError, RetryError, TypeError, aiohttp.ClientError))
         except aiohttp.ClientError as e:
             self.status = self.status or STATUSES["intermittent-task"]
             log.error("Hit aiohttp error: {}".format(e))
@@ -150,7 +145,7 @@ class Task:
 
     async def _upload_log(self):
         payload = {"storageType": "s3", "expires": arrow.get(self.claim_task["task"]["expires"]).isoformat(), "contentType": "text/plain"}
-        args = [self.task_id, self.run_id, 'public/logs/live_backing.log', payload]
+        args = [self.task_id, self.run_id, "public/logs/live_backing.log", payload]
         async with aiohttp.ClientSession() as session:
             temp_queue = Queue(options={"credentials": self.task_credentials, "rootUrl": self.config["taskcluster_root_url"]}, session=session)
             tc_response = await temp_queue.createArtifact(*args)
