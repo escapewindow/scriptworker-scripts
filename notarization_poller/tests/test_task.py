@@ -61,15 +61,17 @@ async def test_task_credentials(mocker, claim_task, config, event_loop):
 
 # async_start {{{1
 @pytest.mark.asyncio
-@pytest.mark.parametrize("raises, expected_status", (
-    (None, 0),
-    (Download404, STATUSES["resource-unavailable"]),
-    (DownloadError, STATUSES["intermittent-task"]),
-    (RetryError, STATUSES["intermittent-task"]),
-    (TaskError, STATUSES["malformed-payload"]),
-))
+@pytest.mark.parametrize(
+    "raises, expected_status",
+    (
+        (None, 0),
+        (Download404, STATUSES["resource-unavailable"]),
+        (DownloadError, STATUSES["intermittent-task"]),
+        (RetryError, STATUSES["intermittent-task"]),
+        (TaskError, STATUSES["malformed-payload"]),
+    ),
+)
 async def test_async_start(mocker, claim_task, config, event_loop, raises, expected_status):
-
     async def fake_run_task(*args):
         if raises:
             raise raises("foo")
