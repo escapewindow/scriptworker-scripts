@@ -251,6 +251,10 @@ async def test_download_uuids(mocker, config, claim_task, event_loop, download_r
         await nooptask.download_uuids()
         assert nooptask.uuids == ("one", "two")
 
+    nooptask.claim_task["task"]["payload"] = {"uuids": ["asdf", "hjkl"]}
+    await nooptask.download_uuids()
+    assert nooptask.uuids == ("asdf", "hjkl")
+
 
 # run_task {{{1
 @pytest.mark.asyncio

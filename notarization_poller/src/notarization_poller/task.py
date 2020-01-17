@@ -206,11 +206,16 @@ class Task:
 
     async def download_uuids(self):
         """Download the UUID manifest."""
-        url = self.claim_task["task"]["payload"]["uuid_manifest"]
-        path = os.path.join(self.task_dir, "uuids.json")
-        self.task_log("Downloading %s", url)
-        await retry_async(download_file, args=(url, path), retry_exceptions=(DownloadError,))
-        uuids = load_json_or_yaml(path, is_path=True)
+        payload = self.claim_task["task"]["payload"]
+        if payload.get("uuids"):
+            # enable specifying uuids directly, for integration tests
+            uuids = payload["uuids"]
+        else:
+            url = self.claim_task["task"]["payload"]["uuid_manifest"]
+            path = os.path.join(self.task_dir, "uuids.json")
+            self.task_log("Downloading %s", url)
+            await retry_async(download_file, args=(url, path), retry_exceptions=(DownloadError,))
+            uuids = load_json_or_yaml(path, is_path=True)
         self.uuids = tuple(uuids)
         self.task_log("UUIDs: %s", self.uuids)
 
