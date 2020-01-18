@@ -34,7 +34,7 @@ DEFAULT_CONFIG = frozendict(
         "worker_id": "...",
         "watch_log_file": False,
         "verbose": False,
-        "xcrun_path": "xcrun",
+        "xcrun_cmd": ("xcrun",),
         "notarization_username": "...",
         "notarization_password": "...",
         "poll_sleep_time": 30,

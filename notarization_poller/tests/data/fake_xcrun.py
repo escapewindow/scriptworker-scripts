@@ -42,27 +42,18 @@ run 2 times before somehow), or we need an alternate solution. This could
 be a timestamp or an offset from claim time. For now, we're going with
 history.
 
-Because we need a clean ``.notarization_cache`` directory per integration run,
-and because we want to clean these up afterwards, it may make sense to copy
-this script into a temp directory per integration run.
-
-Attributes:
-    HISTORY_DIR (str): the path to the directory holding UUID information.
-
 """
 
 import argparse
 import os
 import sys
-import time
-
-HISTORY_DIR = os.path.join(os.path.dirname(__file__), ".notarization_cache")
 
 
 def parse_args(args):
     """Parse cmdln args."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--notarization-info", type=str)
+    parser.add_argument("--history-dir", type=str, default=os.path.join(os.path.dirname(__file__), ".notarization_cache"))
     parsed_args, _ = parser.parse_known_args(args)
     return parsed_args
 
@@ -72,11 +63,12 @@ def main():
     args = sys.argv[1:]
     parsed_args = parse_args(args)
     uuid = parsed_args.notarization_info
+    history_dir = parsed_args.history_dir
     print(uuid)
-    os.makedirs(HISTORY_DIR, exist_ok=True)
+    os.makedirs(history_dir, exist_ok=True)
     # XXX add sleep to mimic response turnaround time from Apple?
     # determine uuid behavior
-    # find any uuid polling history in HISTORY_DIR, if applicable
+    # find any uuid polling history in history_dir, if applicable
     # write new polling history
     # output any required output for this run, exit appropriately
 

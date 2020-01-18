@@ -231,7 +231,7 @@ class Task:
             self.task_log("pending uuids: %s", self.pending_uuids)
             for uuid in self.pending_uuids:
                 self.task_log("Polling %s", uuid)
-                base_cmd = [self.config["xcrun_path"], "altool", "--notarization-info", uuid, "-u", username, "--password"]
+                base_cmd = list(self.config["xcrun_cmd"]) + ["altool", "--notarization-info", uuid, "-u", username, "--password"]
                 log_cmd = base_cmd + ["********"]
                 rm(self.poll_log_path)
                 status = await retry_async(
