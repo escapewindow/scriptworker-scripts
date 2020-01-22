@@ -49,8 +49,94 @@ import os
 import sys
 
 
+def get_uuid_behavior(uuid, hist_len):
+    """Decode the UUID for expected behaviors.
+
+    The UUID can have the following characters:
+
+    - p: exit 0, status pending
+    - s: exit 0, status success
+    - i: exit 0, status invalid
+    - e: exit non-zero (default)
+
+    Args:
+        uuid (str): the uuid to parse
+        hist_len (int): the length of historical behaviors, which should
+            map to the array index
+
+    Returns:
+        list: the list of behaviors
+
+    """
+    try:
+        behavior = uuid[hist_len]
+    except IndexError:
+        behavior = "e"
+    return behavior
+
+
+def get_uuid_history(history_dir, uuid):
+    """Parse the history file to determine the next behavior.
+
+    Args:
+        history_dir (str): the directory to parse
+        uuid (str): the uuid to parse
+
+    Returns:
+        int: the number of previous actions
+
+    """
+    try:
+        with open(os.path.join(history_dir, uuid)) as fh:
+            return len(fh.readlines())
+    except OSError:
+        return 0
+
+
+def append_behavior(history_dir, uuid, behavior):
+    """Append the behavior to the history file.
+
+    Args:
+        history_dir (str): the directory to parse
+        uuid (str): the uuid to parse
+        behavior (str): the behavior to perform.
+
+    """
+    with open(os.path.join(history_dir, uuid), "a") as fh:
+        print(behavior, file=fh)
+
+
+def do_behavior(behavior):
+    """Perform the behavior.
+
+    Args:
+        behavior (str): the behavior to perform.
+
+    """
+    exit_val = 0
+    if behavior == "p":
+        print("Status: pending")
+    elif behavior == "s":
+        print("Status: success")
+    elif behavior == "i":
+        print("Status: invalid")
+    else:
+        print("Unexpected error")
+        exit_val = 2
+
+    sys.exit(exit_val)
+
+
 def parse_args(args):
-    """Parse cmdln args."""
+    """Parse cmdln args, ignoring unknown options.
+
+    Args:
+        args (list): the list of cmdln args (``sys.argv[1:]``)
+
+    Returns:
+        ``argparse.Namespace``: the parsed args
+
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--notarization-info", type=str)
     parser.add_argument("--history-dir", type=str, default=os.path.join(os.path.dirname(__file__), ".notarization_cache"))
@@ -62,15 +148,15 @@ def main():
     """Main function."""
     args = sys.argv[1:]
     parsed_args = parse_args(args)
-    uuid = parsed_args.notarization_info
+    uuid = parsed_args.notarization_info or "e"
     history_dir = parsed_args.history_dir
     print(uuid)
     os.makedirs(history_dir, exist_ok=True)
     # XXX add sleep to mimic response turnaround time from Apple?
-    # determine uuid behavior
-    # find any uuid polling history in history_dir, if applicable
-    # write new polling history
-    # output any required output for this run, exit appropriately
+    hist_len = get_uuid_history(history_dir, uuid)
+    behavior = get_uuid_behavior(uuid, hist_len)
+    append_behavior(history_dir, uuid, behavior)
+    do_behavior(behavior)
 
 
 __name__ == "__main__" and main()
