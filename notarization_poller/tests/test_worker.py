@@ -71,13 +71,23 @@ def test_main_running_sigusr1(mocker, config, event_loop, running):
     run_tasks_cancelled = event_loop.create_future()
 
     class MockRunTasks:
+        is_stopped = False
+
         async def cancel(*args):
             run_tasks_cancelled.set_result(True)
 
         async def invoke(*args):
             os.kill(os.getpid(), signal.SIGUSR1)
+            await asyncio.sleep(0.1)
 
     mrt = MockRunTasks()
+    mrt.running_tasks = []
+    if running:
+        fake_task1 = mocker.MagicMock()
+        fake_task1.main_fut = noop_async()
+        fake_task2 = mocker.MagicMock()
+        fake_task2.main_fut = noop_async()
+        mrt.running_tasks = [fake_task1, fake_task2]
 
     tmp = os.path.join(config["work_dir"], "foo")
     with open(tmp, "w") as fh:
@@ -87,6 +97,7 @@ def test_main_running_sigusr1(mocker, config, event_loop, running):
     worker.main(event_loop=event_loop)
 
     assert not run_tasks_cancelled.done()
+    assert mrt.is_stopped
 
 
 # invoke {{{1
