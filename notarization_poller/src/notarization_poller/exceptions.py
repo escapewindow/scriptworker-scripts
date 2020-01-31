@@ -29,17 +29,6 @@ class RetryError(WorkerError):
     exit_code = STATUSES["resource-unavailable"]
 
 
-class SupersededError(WorkerError):
-    """worker retry error.
-
-    Attributes:
-        exit_code (int): this is set to 4 (resource-unavailable)
-
-    """
-
-    exit_code = STATUSES["superseded"]
-
-
 class ConfigError(WorkerError):
     """Invalid configuration provided to the worker.
 
