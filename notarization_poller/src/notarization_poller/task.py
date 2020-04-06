@@ -34,6 +34,16 @@ log = logging.getLogger(__name__)
 NOTARIZATION_POLL_REGEX = re.compile(r"Status: (?P<status>success|invalid)")
 
 
+class UUID:
+    """Manages all information related to a single uuid."""
+
+    def __init__(self, uuid, submission_time=None):
+        self.uuid = uuid
+        self.submission_time = submission_time or None
+        self.approved_time = None
+        self.history = []
+
+
 class Task:
     """Manages all information related to a single running task."""
 
