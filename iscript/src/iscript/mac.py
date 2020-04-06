@@ -999,6 +999,37 @@ async def download_entitlements_file(config, key_config, task):
     return to
 
 
+# create_uuid_manifest {{{1
+async def create_uuid_manifest(config, all_paths, poll_uuids):
+    """Create the UUID manifest file.
+
+    Args:
+        config (dict); the running configuration.
+        all_paths (list): the list of App objects to sign pkg for
+        poll_uuids (dict): uuid to ``log_path``
+
+    Raises:
+        IScriptError: if we can't figure out which app goes to which UUID.
+
+    """
+    uuids = {}
+    now = arrow.utcnow()
+    for uuid, log_path in poll_uuids.items():
+        uuids[uuid] = {"datetime": str(now)}
+        for app in all_paths:
+            if app.notarization_log_path == log_path:
+                path = app.target_tar_path.replace(f"{config['artifact_dir']}/", "")
+                uuids[uuid]["path"] = path
+                break
+        else:
+            raise IScriptError(f"Can't find path for {log_path}!")
+    # create uuid_manifest.json
+    uuids_path = "{}/public/uuid_manifest.json".format(config["artifact_dir"])
+    makedirs(os.path.dirname(uuids_path))
+    with open(uuids_path, "w") as fh:
+        json.dump(uuids, fh)
+
+
 # notarize_behavior {{{1
 async def notarize_behavior(config, task):
     """Sign and notarize all mac apps for this task.
@@ -1101,14 +1132,9 @@ async def notarize_1_behavior(config, task):
         zip_path = await create_one_notarization_zipfile(work_dir, all_paths, path_attr="app_path")
         poll_uuids = await notarize_no_sudo(work_dir, key_config, zip_path)
 
-    # create uuid_manifest.json
-    uuids_path = "{}/public/uuid_manifest.json".format(config["artifact_dir"])
-    makedirs(os.path.dirname(uuids_path))
-    with open(uuids_path, "w") as fh:
-        json.dump(sorted(poll_uuids.keys()), fh)
-
     await tar_apps(config, all_paths)
     await copy_pkgs_to_artifact_dir(config, all_paths)
+    await create_uuid_manifest(config, all_paths, poll_uuids)
 
     log.info("Done signing apps and submitting them for notarization.")
 

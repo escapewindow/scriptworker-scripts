@@ -3,6 +3,7 @@
 """Test iscript.mac
 """
 import asyncio
+import json
 import os
 import plistlib
 from functools import partial
@@ -863,6 +864,35 @@ async def test_download_entitlements_file(url, use_entitlements, raises, expecte
         assert await mac.download_entitlements_file(config, key_config, task) == expected
 
 
+# create_uuid_manifest {{{1
+@pytest.mark.asyncio
+async def test_create_uuid_manifest(tmpdir, mocker):
+    """``create_uuid_manifest`` creates the manifest as expected.
+
+    It also raises if there is an unknown uuid log path.
+
+    """
+    now = arrow.utcnow()
+    mocker.patch.object(arrow, "utcnow", return_value=now)
+    work_dir = os.path.join(tmpdir, "work")
+    artifact_dir = os.path.join(tmpdir, "artifacts")
+    config = {"artifact_dir": artifact_dir}
+    all_paths = [
+        mac.App(notarization_log_path=os.path.join(work_dir, "one.log"), target_tar_path=os.path.join(artifact_dir, "public", "one.tar.gz")),
+        mac.App(notarization_log_path=os.path.join(work_dir, "two.log"), target_tar_path=os.path.join(artifact_dir, "public", "two.tar.gz")),
+    ]
+    poll_uuids = {"one_uuid": os.path.join(work_dir, "one.log"), "two_uuid": os.path.join(work_dir, "two.log")}
+    await mac.create_uuid_manifest(config, all_paths, poll_uuids)
+    with open(f"{artifact_dir}/public/uuid_manifest.json") as fh:
+        assert json.load(fh) == {
+            "one_uuid": {"path": "public/one.tar.gz", "datetime": str(now)},
+            "two_uuid": {"path": "public/two.tar.gz", "datetime": str(now)},
+        }
+    poll_uuids["unknown_uuid"] = os.path.join(work_dir, "unknown.log")
+    with pytest.raises(IScriptError):
+        await mac.create_uuid_manifest(config, all_paths, poll_uuids)
+
+
 # sign_behavior {{{1
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_langpack", (False, True))
@@ -1073,6 +1103,7 @@ async def test_notarize_1_behavior(mocker, tmpdir, notarize_type, use_langpack):
     mocker.patch.object(mac, "get_bundle_executable", return_value="bundle_executable")
     mocker.patch.object(mac, "get_app_dir", return_value=os.path.join(work_dir, "foo/bar.app"))
     mocker.patch.object(mac, "get_uuid_from_log", return_value="uuid")
+    mocker.patch.object(mac, "create_uuid_manifest", new=noop_async)
     mocker.patch.object(mac, "copy_pkgs_to_artifact_dir", new=noop_async)
     mocker.patch.object(mac, "get_key_config", return_value=config["mac_config"]["dep"])
     mocker.patch.object(mac, "sign_widevine_dir", new=noop_async)
