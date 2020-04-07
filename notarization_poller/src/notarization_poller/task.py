@@ -34,16 +34,20 @@ log = logging.getLogger(__name__)
 NOTARIZATION_POLL_REGEX = re.compile(r"Status: (?P<status>success|invalid)")
 
 
+# UUID {{{1
 class UUID:
     """Manages all information related to a single uuid."""
 
-    def __init__(self, uuid, submission_time=None):
+    def __init__(self, uuid, upstream_task_id, upstream_path, submission_time=None):
         self.uuid = uuid
         self.submission_time = submission_time or None
+        self.upstream_path = upstream_path
+        self.upstream_task_id = upstream_task_id
         self.approved_time = None
         self.history = []
 
 
+# Task {{{1
 class Task:
     """Manages all information related to a single running task."""
 
@@ -216,17 +220,29 @@ class Task:
             )
             worker_log and log.log(level, "%s:%s - {}".format(msg), self.task_id, self.run_id, *args)
 
+    def upstream_task_id(self):
+        """Get the upstream taskId."""
+        payload = self.claim_task["task"]["payload"]
+        if "upstream-task-id" in payload:
+            return payload["upstream-task-id"]
+        url = self.claim_task["task"]["payload"]["uuid_manifest"]
+
+https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/Cee_8SQeQrKSUy4pPyU9WA/artifacts/public/uuid_manifest.json
+
     async def download_uuids(self):
         """Download the UUID manifest."""
         payload = self.claim_task["task"]["payload"]
         if payload.get("uuids"):
             # enable specifying uuids directly, for integration tests
+            # TODO populate uuids with `UUID`s
             uuids = payload["uuids"]
         else:
             url = self.claim_task["task"]["payload"]["uuid_manifest"]
             path = os.path.join(self.task_dir, "uuids.json")
             self.task_log("Downloading %s", url)
             await retry_async(download_file, args=(url, path), retry_exceptions=(DownloadError,))
+            # TODO populate uuids with `UUID`s
+            # XXX Support both list and dict until we uplift the dict patches
             uuids = load_json_or_yaml(path, is_path=True)
         self.uuids = tuple(uuids)
         self.task_log("UUIDs: %s", self.uuids)
@@ -259,6 +275,8 @@ class Task:
                 for line in contents.splitlines():
                     self.task_log(" %s", line, worker_log=False)
                 if status == STATUSES["success"]:
+                    # TODO detect unknown?
+                    # TODO append status to uuid history
                     m = NOTARIZATION_POLL_REGEX.search(contents)
                     if m is not None:
                         if m["status"] == "invalid":
@@ -276,4 +294,5 @@ class Task:
                 self.task_log("All UUIDs are successfully notarized: %s", self.uuids)
                 break
             else:
+                # XXX detect long poles
                 await asyncio.sleep(self.config["poll_sleep_time"])
