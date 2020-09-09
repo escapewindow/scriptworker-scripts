@@ -25,6 +25,8 @@ async def add_version(context, version):
     Use the `min_version` here, rather than the string with the buildid etc.
     """
     url = get_api_url(context, ADD_VERSION, version=version)
+    # XXX flesh this out. we need to PUT and check for a 20x response, and use
+    # retry_async to retry on non-20x.
 
 
 async def do_upload(context, locale):
