@@ -30,6 +30,7 @@ def get_default_config(base_dir=None):
 
 
 async def sign_addon(context, locale):
+    """Upload addons to AMO, then poll AMO for signed addons."""
     try:
         upload_data = await retry_async(do_upload, args=(context, locale), retry_exceptions=tuple([ClientError, asyncio.TimeoutError]))
     except AMOConflictError as exc:
@@ -64,6 +65,7 @@ async def async_main(context):
     async with aiohttp.ClientSession(connector=connector) as session:
         context.session = session
         build_locales_context(context)
+        # XXX add version
         tasks = []
         for locale in context.locales:
             tasks.append(asyncio.ensure_future(sign_addon(context, locale)))
